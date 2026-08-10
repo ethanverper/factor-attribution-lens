@@ -1,0 +1,116 @@
+"""FastAPI routes for the Phase 3 dashboard: a holdings form and its results page.
+
+`GET /` renders the holdings-entry form. `POST /dashboard` takes that form
+submission, builds a `PortfolioRequest` (Phase 1's own request schema --
+no parallel input model), runs it through the same `build_portfolio_return_data`
+-> `analyze_portfolio` pipeline `POST /portfolio/returns` and Phase 2 use,
+computes the Phase 3 attribution view, and renders the dashboard. On any
+data or validation error, it re-renders the form with the submitted values
+preserved and an inline error banner, rather than a bare 500/422.
+"""
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+from fastapi import APIRouter, Form
+from fastapi.responses import HTMLResponse
+from pydantic import ValidationError
+
+from app.dashboard.attribution import compute_return_attribution, compute_risk_attribution
+from app.dashboard.pages import render_dashboard_page, render_form_page
+from app.data.equity import EquityDataError
+from app.data.factors import FactorDataError
+from app.models.analysis import analyze_portfolio
+from app.models.capm import InsufficientDataError as CAPMInsufficientDataError
+from app.models.fama_french import (
+    InsufficientDataError as FactorModelInsufficientDataError,
+    MissingFactorsError,
+)
+from app.models.optimization import InsufficientDataError as FrontierInsufficientDataError
+from app.schemas import HoldingInput, PortfolioRequest
+from app.service import build_portfolio_return_data
+
+router = APIRouter()
+
+_DEFAULT_END = date.today() - timedelta(days=1)
+_DEFAULT_START = _DEFAULT_END - timedelta(days=365)
+
+_MODELING_ERRORS = (
+    CAPMInsufficientDataError,
+    FactorModelInsufficientDataError,
+    FrontierInsufficientDataError,
+    MissingFactorsError,
+)
+
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard_form() -> str:
+    return render_form_page(start_date=_DEFAULT_START, end_date=_DEFAULT_END)
+
+
+@router.post("/dashboard", response_class=HTMLResponse)
+async def dashboard_submit(
+    symbol: list[str] = Form(default=[]),
+    weight: list[str] = Form(default=[]),
+    benchmark: str = Form("^GSPC"),
+    start_date: date = Form(...),
+    end_date: date = Form(...),
+    factor_model: str = Form("3"),
+    frequency: str = Form("daily"),
+) -> HTMLResponse:
+    def re_render_form(message: str, status_code: int) -> HTMLResponse:
+        html = render_form_page(
+            error=message,
+            symbols=symbol or None,
+            weights=weight or None,
+            benchmark=benchmark,
+            start_date=start_date,
+            end_date=end_date,
+            factor_model=factor_model,
+            frequency=frequency,
+        )
+        return HTMLResponse(html, status_code=status_code)
+
+    holdings: list[HoldingInput] = []
+    for raw_symbol, raw_weight in zip(symbol, weight):
+        raw_symbol = raw_symbol.strip()
+        raw_weight = raw_weight.strip()
+        if not raw_symbol and not raw_weight:
+            continue
+        if not raw_symbol or not raw_weight:
+            return re_render_form(f"Holding row with '{raw_symbol or raw_weight}' needs both a symbol and a weight.", 400)
+        try:
+            holdings.append(HoldingInput(symbol=raw_symbol, weight=float(raw_weight)))
+        except (ValueError, ValidationError) as exc:
+            return re_render_form(f"Invalid holding '{raw_symbol}': {exc}", 400)
+
+    if not holdings:
+        return re_render_form("Enter at least one holding.", 400)
+
+    try:
+        request = PortfolioRequest(
+            holdings=holdings,
+            benchmark=benchmark,
+            start_date=start_date,
+            end_date=end_date,
+            factor_model=factor_model,
+            frequency=frequency,
+        )
+    except ValidationError as exc:
+        return re_render_form(str(exc), 400)
+
+    try:
+        data = build_portfolio_return_data(request)
+        analysis = analyze_portfolio(data)
+    except (EquityDataError, FactorDataError) as exc:
+        return re_render_form(f"Data source error: {exc}", 502)
+    except _MODELING_ERRORS as exc:
+        return re_render_form(str(exc), 400)
+    except ValueError as exc:
+        return re_render_form(str(exc), 400)
+
+    return_attribution = compute_return_attribution(analysis.factor_model, data)
+    risk_attribution = compute_risk_attribution(analysis.factor_model)
+
+    html = render_dashboard_page(data, analysis, return_attribution, risk_attribution)
+    return HTMLResponse(html)

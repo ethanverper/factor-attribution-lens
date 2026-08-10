@@ -1,12 +1,17 @@
-"""Factor Lens API — Phase 1 data layer.
+"""Factor Lens API — Phase 1 data layer + Phase 3 dashboard.
 
-Takes a holdings + weights input and returns live, structured return data
-(equity, benchmark, and Fama-French factor series) for Phase 2 modeling.
+`POST /portfolio/returns` (Phase 1) takes a holdings + weights input and
+returns live, structured return data for Phase 2 modeling. `GET /` and
+`POST /dashboard` (Phase 3, `app/dashboard/`) render a server-side HTML
+view of live `analyze_portfolio()` output -- the explainable
+attribution/visualization layer described in
+`docs/decisions/0004-phase3-dashboard-architecture.md`.
 """
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
+from app.dashboard.routes import router as dashboard_router
 from app.data.equity import EquityDataError
 from app.data.factors import FactorDataError
 from app.schemas import PortfolioRequest, PortfolioReturnData
@@ -14,9 +19,11 @@ from app.service import build_portfolio_return_data
 
 app = FastAPI(
     title="Factor Lens Data API",
-    description="Live equity, benchmark, and Fama-French factor return data for a given portfolio.",
+    description="Live equity, benchmark, Fama-French factor data, and an attribution dashboard for a given portfolio.",
     version="0.1.0",
 )
+
+app.include_router(dashboard_router)
 
 
 @app.get("/health")
