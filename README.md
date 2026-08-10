@@ -7,9 +7,13 @@ live market data, with plain-language explanations, not a black-box score.
 
 This repository currently implements **Phase 1: Foundation & Data
 Integration** (the live data backbone), **Phase 2: Quant Core** (CAPM,
-Fama-French, and Markowitz modeling), and **Phase 3: Explainable
-Attribution & Visualization Layer** (a server-rendered dashboard). It does
-not yet have plain-language narration; that's Phase 4.
+Fama-French, and Markowitz modeling), **Phase 3: Explainable Attribution &
+Visualization Layer** (a server-rendered dashboard), and **Phase 7: UI/UX
+Overhaul & Constrained Inputs** (a full sidebar app shell across all eight
+`docs/project-standards.md` sections, and a constrained ticker/benchmark
+combobox in place of free text). It does not yet have the plain-language
+Learning/Glossary content or the rendered References & Formulas section —
+those are clearly marked "coming soon" in the running app and are Phase 8/9.
 
 ## What this phase does
 
@@ -175,6 +179,32 @@ This is internal decision-support analytics, same limit as Phase 2: no
 personalized investment advice, no buy/sell/rebalance signal. The
 dashboard's disclaimer banner and section copy say so explicitly.
 
+## Phase 7: UI/UX Overhaul & Constrained Inputs (`app/dashboard/shell.py`, `app/dashboard/tickers.py`)
+
+Both `GET /` and `POST /dashboard` now render one persistent app shell — a
+sidebar table-of-contents nav across all eight `docs/project-standards.md`
+sections (Overview, Inputs, Results, Learning, Glossary, Tools &
+Technologies, References & Formulas, Real World/Corporate Applications) —
+instead of two disconnected pages. Overview/Inputs/Results/Tools &
+Technologies are fully built; Learning/Glossary/References & Formulas/Real
+World are clearly-marked placeholder panels for Phase 8 (`business-
+intelligence`) and Phase 9 (`educator`) to fill in. Phase 3's charts
+(`viz.py`, `attribution.py`) are unchanged — only re-homed into the Results
+panel and restyled to the new visual system (Fraunces display serif + IBM
+Plex Sans/Mono, reusing the existing validated chart palette's
+`--series-2` as the one signature page accent).
+
+The holdings and benchmark fields are no longer free text: they're a
+hand-built accessible combobox backed by a curated ~496-symbol S&P 500
+universe (`app/dashboard/tickers.py`) plus a 6-item benchmark list. The
+value that actually gets submitted only ever comes from selecting a real
+option — never from raw typed text — and `app/dashboard/routes.py`
+independently re-validates every submitted symbol server-side as a
+backstop against a non-browser submission. See
+[`docs/decisions/0005-phase7-ticker-universe.md`](docs/decisions/0005-phase7-ticker-universe.md)
+for why this universe, how it's sourced, and its known limitations (it's a
+static snapshot, not a live index-membership feed).
+
 ## Development
 
 ```bash
@@ -226,11 +256,13 @@ app/
     covariance.py        covariance estimation + eigenvalue-clipping regularization
     optimization.py      Markowitz efficient frontier + current-portfolio positioning
     analysis.py          orchestrator: analyze_portfolio(bundle) -> PortfolioAnalysis
-  dashboard/             Phase 3 attribution & visualization layer
+  dashboard/             Phase 3 attribution & visualization layer + Phase 7 app shell
     routes.py            GET / (form), POST /dashboard (live-data results page)
     attribution.py       return/risk attribution derived from Phase 2 output
     viz.py               SVG chart components (dataviz-skill palette/marks/interaction)
-    pages.py             full-page HTML assembly
+    pages.py             per-page panel assembly (Inputs, Results + Phase 3 chart sections)
+    shell.py             Phase 7 app shell: sidebar nav, tab panels, ticker/benchmark combobox
+    tickers.py           Phase 7 curated S&P 500 + benchmark universe (constrained-input data)
 tests/
   test_data_integration.py    Live Phase 1 data-layer checks (no mocking)
   test_api.py                 Live Phase 1 end-to-end API checks (no mocking)
@@ -239,14 +271,16 @@ tests/
   test_dashboard.py           Live Phase 3 dashboard checks + return-attribution identity check
 ```
 
-## What's next (Phase 4, `educator`)
+## What's next (Phase 8 `business-intelligence`, Phase 9 `educator`)
 
-Phase 3 hands off a running dashboard (`GET /`, `POST /dashboard`) built on
-live `analyze_portfolio()` output, plus a presentation-layer return/risk
-attribution derived in `app/dashboard/attribution.py`. Phase 4 builds the
-dual-register (technical + plain-language) narrative layer explaining what
-a user's beta, factor loadings, and frontier position mean — see
+Phase 7 hands off a full eight-section app shell with Overview/Inputs/
+Results/Tools & Technologies built and Learning/Glossary/References &
+Formulas/Real World left as clearly-marked placeholder panels (see
+`app/dashboard/pages.py`'s `_base_panels()` and
+`shell.render_placeholder_section`). Phase 8 writes the References &
+Formulas section and reviews the Results section's numbers/attribution
+logic post-restyle; Phase 9 builds the dual-register Learning content, the
+Glossary, and the Real World/Corporate Applications section — see
 [`docs/decisions/0004-phase3-dashboard-architecture.md`](docs/decisions/0004-phase3-dashboard-architecture.md)
-for what Phase 4 needs to know about units (return-attribution
-contributions are per-period, not annualized — don't re-annualize them
-piecewise) and [`docs/roadmap.md`](docs/roadmap.md) for the full phase plan.
+for return-attribution unit conventions (per-period, not annualized) and
+[`docs/roadmap.md`](docs/roadmap.md) for the full phase plan.

@@ -1,100 +1,63 @@
-"""Full-page HTML assembly for the Phase 3 dashboard.
+"""Full-page HTML assembly for the Phase 7 app shell.
 
-Two pages: the holdings-entry form (`render_form_page`) and the results
-dashboard (`render_dashboard_page`), which renders live output from
-`app.models.analysis.analyze_portfolio` via the chart components in
-`viz.py`. Plain Python string templates, not Jinja2 -- see decision 0004
-for why. Every user-originated string is passed through `viz.esc` before
-interpolation.
+Two entry points, same as Phase 3: the holdings-entry form (`render_form_page`,
+`GET /`) and the results dashboard (`render_dashboard_page`, `POST /dashboard`
+on success). Both now render the *same* eight-section app shell
+(`app/dashboard/shell.py`) -- Overview, Inputs, Results, Learning, Glossary,
+Tools & Technologies, References & Formulas, Real World/Corporate
+Applications -- with only the active tab and the Inputs/Results panel
+contents differing between the two. Chart-building logic
+(`_render_exposure_section` / `_render_frontier_section` /
+`_render_attribution_section`) is unchanged from Phase 3 other than being
+re-homed under the Results panel -- the underlying numbers and SVG marks are
+untouched, only the surrounding chrome changed.
+
+Plain Python string templates, not Jinja2 -- see decision 0004 for why (still
+holds; Phase 7 doesn't add branching complex enough to revisit it). Every
+user-originated string is passed through `viz.esc` before interpolation.
 """
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from app.dashboard import viz
+from app.dashboard import shell, tickers, viz
 from app.dashboard.attribution import FACTOR_LABELS, RiskAttribution, ReturnAttribution
 from app.dashboard.viz import esc
 from app.models.schemas import PortfolioAnalysis
 from app.schemas import PortfolioReturnData
 
-PAGE_STYLE = """
-* { box-sizing: border-box; }
-body { margin: 0; }
-.page-shell { max-width: 880px; margin: 0 auto; padding: 28px 20px 60px; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 6px; }
-.page-header h1 { font-size: 22px; margin: 0; font-weight: 700; }
-.page-nav a { color: var(--text-secondary); font-size: 13px; text-decoration: none; }
-.page-nav a:hover { text-decoration: underline; }
-.theme-btn { background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-secondary); font-size: 12px; padding: 5px 10px; cursor: pointer; }
-.freshness-banner { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 14px; font-size: 12.5px; color: var(--text-secondary); margin: 14px 0 22px; }
-.freshness-banner strong { color: var(--text-primary); }
-.disclaimer { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
-  margin: 30px 0 10px; }
-.section-title:first-of-type { margin-top: 8px; }
-.form-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
-.form-card h1 { font-size: 20px; margin: 0 0 6px; }
-.form-card p.intro { font-size: 13.5px; color: var(--text-secondary); margin: 0 0 20px; max-width: 60ch; }
-.field-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.field { flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; }
-.field label { font-size: 12px; color: var(--text-secondary); }
-.field input, .field select { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
-  background: var(--page-plane); color: var(--text-primary); }
-.holdings-label { font-size: 12px; color: var(--text-secondary); margin: 18px 0 6px; }
-.holding-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-.holding-row input[name="symbol"] { flex: 1 1 140px; text-transform: uppercase; }
-.holding-row input[name="weight"] { flex: 0 1 120px; }
-.row-remove { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted);
-  width: 30px; height: 34px; cursor: pointer; font-size: 15px; }
-.row-remove:hover { color: var(--diverging-neg); }
-.add-row-btn { background: transparent; border: 1px dashed var(--baseline); border-radius: 6px;
-  color: var(--text-secondary); padding: 7px 12px; font-size: 12.5px; cursor: pointer; margin-top: 2px; }
-.submit-btn { background: var(--series-1); color: white; border: none; border-radius: 7px; padding: 11px 22px;
-  font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 18px; }
-.error-banner { background: color-mix(in srgb, var(--diverging-neg) 12%, var(--surface-1));
-  border: 1px solid color-mix(in srgb, var(--diverging-neg) 40%, var(--border)); border-radius: 8px;
-  padding: 12px 14px; font-size: 13px; color: var(--text-primary); margin-bottom: 18px; }
-.form-footnote { font-size: 12px; color: var(--text-muted); margin-top: 16px; max-width: 60ch; }
-"""
-
-
-def _page_shell(title: str, body: str) -> str:
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(title)}</title>
-<style>{viz.CHART_STYLE}{PAGE_STYLE}</style>
-</head>
-<body class="viz-root">
-<div class="page-shell">
-{body}
-</div>
-<script>{viz.CHART_SCRIPT}</script>
-</body>
-</html>"""
+_TICKER_DATA_SCRIPT = shell.render_ticker_data_script(
+    [(s, n) for s, n, _sector in tickers.SP500_CONSTITUENTS], list(tickers.BENCHMARKS)
+)
 
 
 # ---------------------------------------------------------------------------
-# Form page
+# Inputs panel (holdings-entry form)
 # ---------------------------------------------------------------------------
 
 
 def _holding_row_html(symbol: str = "", weight: str = "") -> str:
+    label = tickers.ticker_name(symbol) if symbol else None
+    combobox = shell.render_combobox(
+        field_name="symbol",
+        source_var="__FL_TICKERS__",
+        selected_symbol=symbol,
+        selected_label=label or "",
+        placeholder="Search ticker or company…",
+    )
     return (
         '<div class="holding-row">'
-        f'<input type="text" name="symbol" placeholder="e.g. AAPL" maxlength="12" value="{esc(symbol)}">'
+        f'<div class="field">{combobox}</div>'
+        '<div class="field weight-field">'
         f'<input type="number" name="weight" placeholder="0.00–1.00" step="0.0001" min="0" max="1" value="{esc(weight)}">'
+        "</div>"
         '<button type="button" class="row-remove" aria-label="Remove holding" '
         "onclick=\"this.parentElement.remove()\">×</button>"
         "</div>"
     )
 
 
-def render_form_page(
+def _inputs_panel(
     *,
     error: str | None = None,
     symbols: list[str] | None = None,
@@ -114,26 +77,30 @@ def render_form_page(
     def selected(value: str, target: str) -> str:
         return "selected" if value == target else ""
 
-    body = f"""
-<div class="page-header">
-  <h1>Factor Lens</h1>
-  <button class="theme-btn" type="button" data-theme-toggle>Toggle theme</button>
-</div>
+    benchmark_combobox = shell.render_combobox(
+        field_name="benchmark",
+        source_var="__FL_BENCHMARKS__",
+        selected_symbol=benchmark,
+        selected_label=tickers.benchmark_name(benchmark) or "",
+        placeholder="Search benchmark…",
+    )
+
+    return f"""
+<div class="section-eyebrow">§02 · Inputs</div>
+<h1>Portfolio &amp; benchmark</h1>
+<p class="section-lede">Choose holdings and a benchmark from the curated large-cap universe below (search by
+ticker or company name), a date range, and a Fama-French model. Weights must sum to 1.0.</p>
 <div class="form-card">
-  <h1>Portfolio attribution dashboard</h1>
-  <p class="intro">Enter your holdings and a benchmark to get CAPM beta, Fama-French factor loadings,
-  an efficient-frontier view, and a return/risk attribution breakdown, computed live from market data.
-  This is decision-support analytics, not investment advice.</p>
   {error_html}
   <form method="post" action="/dashboard">
-    <div class="holdings-label">Holdings (ticker + portfolio weight; weights must sum to 1.0)</div>
+    <div class="holdings-label">Holdings</div>
     <div id="holdings-rows">{rows}</div>
     <button type="button" class="add-row-btn" id="add-holding-btn">+ Add holding</button>
 
-    <div class="field-row" style="margin-top:20px;">
+    <div class="field-row" style="margin-top:22px;">
       <div class="field">
-        <label for="benchmark">Benchmark</label>
-        <input type="text" id="benchmark" name="benchmark" value="{esc(benchmark)}">
+        <label for="benchmark-search">Benchmark</label>
+        {benchmark_combobox}
       </div>
       <div class="field">
         <label for="factor_model">Fama-French model</label>
@@ -164,22 +131,62 @@ def render_form_page(
   </form>
   <p class="form-footnote">Data sources: yfinance (via the OpenBB Open Data Platform) for equity/benchmark
   prices, Kenneth French's Data Library for factor returns. The efficient frontier is long-only by default.
-  See <code>docs/decisions/</code> for the full modeling methodology.</p>
+  Holdings and benchmark are limited to a curated large-cap ticker universe &mdash; see
+  <code>docs/decisions/0005-phase7-ticker-universe.md</code>.</p>
 </div>
 <template id="holding-row-template">{_holding_row_html()}</template>
-<script>
-document.getElementById('add-holding-btn').addEventListener('click', function () {{
-  var tpl = document.getElementById('holding-row-template');
-  document.getElementById('holdings-rows').appendChild(tpl.content.cloneNode(true));
-}});
-</script>
 """
-    return _page_shell("Factor Lens — Portfolio attribution", body)
+
+
+def render_form_page(
+    *,
+    error: str | None = None,
+    symbols: list[str] | None = None,
+    weights: list[str] | None = None,
+    benchmark: str = "^GSPC",
+    start_date: date | None = None,
+    end_date: date | None = None,
+    factor_model: str = "3",
+    frequency: str = "daily",
+) -> str:
+    inputs_html = _inputs_panel(
+        error=error,
+        symbols=symbols,
+        weights=weights,
+        benchmark=benchmark,
+        start_date=start_date,
+        end_date=end_date,
+        factor_model=factor_model,
+        frequency=frequency,
+    )
+    panels = _base_panels()
+    panels["inputs"] = inputs_html
+    panels["results"] = _results_empty_panel()
+
+    return shell.render_app_shell(
+        active_tab="inputs" if error else "overview",
+        panels=panels,
+        page_title="Factor Lens — Portfolio attribution",
+        ticker_data_script=_TICKER_DATA_SCRIPT,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Dashboard page
+# Results panel (dashboard)
 # ---------------------------------------------------------------------------
+
+
+def _results_empty_panel() -> str:
+    return """
+<div class="section-eyebrow">§03 · Results</div>
+<h1>Results</h1>
+<div class="empty-results">
+  <h2>No analysis yet</h2>
+  <p>Enter holdings and a benchmark on the Inputs tab and run the analysis to see CAPM beta, Fama-French
+  factor loadings, the efficient frontier, and a return/risk attribution breakdown here.</p>
+  <button type="button" class="hero-cta" data-tab-target="inputs" style="margin-top:14px;">Go to Inputs →</button>
+</div>
+"""
 
 
 def render_dashboard_page(
@@ -196,14 +203,9 @@ def render_dashboard_page(
 
     holdings_str = ", ".join(f"{h.symbol} {viz.fmt_pct(h.weight, 1)}" for h in meta.holdings)
 
-    header = f"""
-<div class="page-header">
-  <div>
-    <h1>Factor Lens — Attribution Dashboard</h1>
-    <div class="page-nav"><a href="/">&larr; New holdings</a></div>
-  </div>
-  <button class="theme-btn" type="button" data-theme-toggle>Toggle theme</button>
-</div>
+    freshness = f"""
+<div class="section-eyebrow">§03 · Results</div>
+<h1>Attribution results</h1>
 <div class="freshness-banner">
   <div><strong>Portfolio:</strong> {esc(holdings_str)} &nbsp;·&nbsp; <strong>Benchmark:</strong> {esc(meta.benchmark)}
   &nbsp;·&nbsp; <strong>Model:</strong> Fama-French {esc(meta.factor_model)}-factor, {esc(meta.frequency)}</div>
@@ -211,7 +213,9 @@ def render_dashboard_page(
   ({esc(meta.n_periods)} {esc(meta.frequency)} observations; requested {esc(meta.requested_start_date)}
   to {esc(meta.requested_end_date)}) &nbsp;·&nbsp; Sources: {esc(meta.equity_provider)}; {esc(meta.factor_provider)}
   &nbsp;·&nbsp; Standard errors: {esc(capm.standard_error_convention)}</div>
-  <div class="disclaimer">Internal decision-support analytics only. This is not investment advice, not a recommendation to buy, sell, or rebalance, and not a signal of any kind — it describes where your as-entered portfolio sits relative to modeled benchmarks and factors, historically.</div>
+  <div class="disclaimer">Internal decision-support analytics only. This is not investment advice, not a
+  recommendation to buy, sell, or rebalance, and not a signal of any kind — it describes where your
+  as-entered portfolio sits relative to modeled benchmarks and factors, historically.</div>
 </div>
 """
 
@@ -222,8 +226,28 @@ def render_dashboard_page(
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     footer = f'<p class="form-footnote">Report generated {esc(generated_at)}. Data freshness is stated above and may lag this timestamp — see the "data as of" line.</p>'
 
-    body = header + exposure_section + frontier_section + attribution_section + footer
-    return _page_shell("Factor Lens — Attribution Dashboard", body)
+    results_html = freshness + exposure_section + frontier_section + attribution_section + footer
+
+    inputs_html = _inputs_panel(
+        symbols=[h.symbol for h in meta.holdings],
+        weights=[str(h.weight) for h in meta.holdings],
+        benchmark=meta.benchmark,
+        start_date=meta.requested_start_date,
+        end_date=meta.requested_end_date,
+        factor_model=meta.factor_model,
+        frequency=meta.frequency,
+    )
+
+    panels = _base_panels()
+    panels["inputs"] = inputs_html
+    panels["results"] = results_html
+
+    return shell.render_app_shell(
+        active_tab="results",
+        panels=panels,
+        page_title="Factor Lens — Attribution Dashboard",
+        ticker_data_script=_TICKER_DATA_SCRIPT,
+    )
 
 
 def _render_exposure_section(capm, ff) -> str:
@@ -466,3 +490,54 @@ def _render_attribution_section(return_attribution: ReturnAttribution, risk_attr
   pieces would not reconcile to the realized total the way the per-period figures above do exactly.</p>
 </div>
 """
+
+
+# ---------------------------------------------------------------------------
+# Shared static panels (Overview, Tools & Technologies, Phase 8/9 placeholders)
+# ---------------------------------------------------------------------------
+
+
+def _base_panels() -> dict[str, str]:
+    return {
+        "overview": shell.render_overview_section(),
+        "tools": shell.render_tools_section(),
+        "learning": shell.render_placeholder_section(
+            tab_id="learning",
+            title="Learning",
+            phase_label="Phase 9 (educator)",
+            owner="educator",
+            body=(
+                "Dual-register explanations (technical + plain-language) of what your beta, factor loadings, "
+                "and frontier position actually mean for your portfolio &mdash; embedded here, next to the "
+                "numbers they explain, not in a docs folder nobody visiting the site would see."
+            ),
+        ),
+        "glossary": shell.render_placeholder_section(
+            tab_id="glossary",
+            title="Glossary",
+            phase_label="Phase 9 (educator)",
+            owner="educator",
+            body="Terms used throughout this project, defined both technically and in plain language.",
+        ),
+        "references": shell.render_placeholder_section(
+            tab_id="references",
+            title="References & Formulas",
+            phase_label="Phase 8 (business-intelligence)",
+            owner="business-intelligence",
+            body=(
+                "The actual CAPM, Fama-French, and Markowitz formulas this project computes against, "
+                "properly rendered with sources &mdash; not just prose describing them."
+            ),
+        ),
+        "real-world": shell.render_placeholder_section(
+            tab_id="real-world",
+            title="Real World / Corporate Applications",
+            phase_label="Phase 9 (educator)",
+            owner="educator",
+            body=(
+                "How factor attribution and portfolio optimization tooling like this is actually used in "
+                "industry &mdash; Barra/Axioma-style risk desks, RIA client reporting, and where this project "
+                "fits in that landscape."
+            ),
+        ),
+    }

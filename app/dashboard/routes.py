@@ -1,12 +1,22 @@
-"""FastAPI routes for the Phase 3 dashboard: a holdings form and its results page.
+"""FastAPI routes for the app's dashboard: a holdings form and its results page.
 
-`GET /` renders the holdings-entry form. `POST /dashboard` takes that form
+`GET /` renders the holdings-entry form (Phase 7: now one tab of the full
+app shell, see `app/dashboard/shell.py`). `POST /dashboard` takes that form
 submission, builds a `PortfolioRequest` (Phase 1's own request schema --
 no parallel input model), runs it through the same `build_portfolio_return_data`
 -> `analyze_portfolio` pipeline `POST /portfolio/returns` and Phase 2 use,
 computes the Phase 3 attribution view, and renders the dashboard. On any
 data or validation error, it re-renders the form with the submitted values
 preserved and an inline error banner, rather than a bare 500/422.
+
+Phase 7 adds one more validation step ahead of all of this: submitted
+holding/benchmark symbols must be in the curated universe
+(`app/dashboard/tickers.py`). The combobox UI is the primary constraint (a
+user can't type an arbitrary ticker into it), but a submission that bypasses
+the browser entirely (a hand-crafted POST) is still checked server-side
+before it ever reaches Phase 1's `PortfolioRequest`/`build_portfolio_return_data` --
+per `docs/project-standards.md`'s "invalid values in a constrained field
+shouldn't be able to reach the backend at all."
 """
 from __future__ import annotations
 
@@ -16,6 +26,7 @@ from fastapi import APIRouter, Form
 from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
+from app.dashboard import tickers
 from app.dashboard.attribution import compute_return_attribution, compute_risk_attribution
 from app.dashboard.pages import render_dashboard_page, render_form_page
 from app.data.equity import EquityDataError
@@ -79,6 +90,10 @@ async def dashboard_submit(
             continue
         if not raw_symbol or not raw_weight:
             return re_render_form(f"Holding row with '{raw_symbol or raw_weight}' needs both a symbol and a weight.", 400)
+        if not tickers.is_valid_ticker(raw_symbol):
+            return re_render_form(
+                f"'{raw_symbol}' is not in the curated ticker universe. Choose a holding from the search list.", 400
+            )
         try:
             holdings.append(HoldingInput(symbol=raw_symbol, weight=float(raw_weight)))
         except (ValueError, ValidationError) as exc:
@@ -86,6 +101,11 @@ async def dashboard_submit(
 
     if not holdings:
         return re_render_form("Enter at least one holding.", 400)
+
+    if not tickers.is_valid_benchmark(benchmark):
+        return re_render_form(
+            f"'{benchmark}' is not in the curated benchmark list. Choose a benchmark from the search list.", 400
+        )
 
     try:
         request = PortfolioRequest(
