@@ -519,16 +519,7 @@ def _base_panels() -> dict[str, str]:
             owner="educator",
             body="Terms used throughout this project, defined both technically and in plain language.",
         ),
-        "references": shell.render_placeholder_section(
-            tab_id="references",
-            title="References & Formulas",
-            phase_label="Phase 8 (business-intelligence)",
-            owner="business-intelligence",
-            body=(
-                "The actual CAPM, Fama-French, and Markowitz formulas this project computes against, "
-                "properly rendered with sources &mdash; not just prose describing them."
-            ),
-        ),
+        "references": shell.render_references_section(),
         "real-world": shell.render_placeholder_section(
             tab_id="real-world",
             title="Real World / Corporate Applications",

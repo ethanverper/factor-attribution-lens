@@ -8,12 +8,14 @@ live market data, with plain-language explanations, not a black-box score.
 This repository currently implements **Phase 1: Foundation & Data
 Integration** (the live data backbone), **Phase 2: Quant Core** (CAPM,
 Fama-French, and Markowitz modeling), **Phase 3: Explainable Attribution &
-Visualization Layer** (a server-rendered dashboard), and **Phase 7: UI/UX
+Visualization Layer** (a server-rendered dashboard), **Phase 7: UI/UX
 Overhaul & Constrained Inputs** (a full sidebar app shell across all eight
 `docs/project-standards.md` sections, and a constrained ticker/benchmark
-combobox in place of free text). It does not yet have the plain-language
-Learning/Glossary content or the rendered References & Formulas section —
-those are clearly marked "coming soon" in the running app and are Phase 8/9.
+combobox in place of free text), and **Phase 8: References, Formulas &
+Results Review** (the rendered References & Formulas section, with sources).
+It does not yet have the plain-language Learning/Glossary content or the
+Real World/Corporate Applications section — those are clearly marked
+"coming soon" in the running app and are Phase 9.
 
 ## What this phase does
 
@@ -186,9 +188,9 @@ sidebar table-of-contents nav across all eight `docs/project-standards.md`
 sections (Overview, Inputs, Results, Learning, Glossary, Tools &
 Technologies, References & Formulas, Real World/Corporate Applications) —
 instead of two disconnected pages. Overview/Inputs/Results/Tools &
-Technologies are fully built; Learning/Glossary/References & Formulas/Real
-World are clearly-marked placeholder panels for Phase 8 (`business-
-intelligence`) and Phase 9 (`educator`) to fill in. Phase 3's charts
+Technologies/References & Formulas are fully built; Learning/Glossary/Real
+World remain clearly-marked placeholder panels for Phase 9 (`educator`) to
+fill in. Phase 3's charts
 (`viz.py`, `attribution.py`) are unchanged — only re-homed into the Results
 panel and restyled to the new visual system (Fraunces display serif + IBM
 Plex Sans/Mono, reusing the existing validated chart palette's
@@ -204,6 +206,30 @@ backstop against a non-browser submission. See
 [`docs/decisions/0005-phase7-ticker-universe.md`](docs/decisions/0005-phase7-ticker-universe.md)
 for why this universe, how it's sourced, and its known limitations (it's a
 static snapshot, not a live index-membership feed).
+
+## Phase 8: References, Formulas & Results Review (`app/dashboard/shell.py`)
+
+The References & Formulas tab (`render_references_section()`) documents the
+exact math each model actually computes — CAPM, Fama-French 3-/5-factor,
+Newey-West HAC regression diagnostics, the Markowitz long-only efficient
+frontier, and the return/risk attribution identity — one card per module,
+each with what it computes, the real notation (rendered inline, `<sub>`/
+`<sup>`, no external math-typesetting library, consistent with Phase 3's
+"no client-side library" convention), and a primary-source citation
+(Sharpe 1964; Fama & French 1993/2015; Newey & West 1987/1994; Markowitz
+1952). This documents this project's actual implementation choices (HAC
+standard errors, long-only frontier with eigenvalue-clipping
+regularization) rather than a generic textbook version — see
+[`docs/decisions/0006-phase8-references-formulas-and-results-review.md`](docs/decisions/0006-phase8-references-formulas-and-results-review.md)
+for the notation/citation convention.
+
+This phase also reviewed the Results tab for regressions introduced by
+Phase 7's restyling — ran the same AAPL/MSFT/GOOGL portfolio directly
+against the model code and through the live dashboard, and confirmed every
+displayed number matches exactly; no regressions found, nothing fixed. The
+pre-existing frontier-chart label-overlap issue Phase 7 flagged was
+confirmed still present (not fixed — out of this phase's scope, flagged
+for Phase 10 QA).
 
 ## Development
 
@@ -271,16 +297,16 @@ tests/
   test_dashboard.py           Live Phase 3 dashboard checks + return-attribution identity check
 ```
 
-## What's next (Phase 8 `business-intelligence`, Phase 9 `educator`)
+## What's next (Phase 9 `educator`)
 
-Phase 7 hands off a full eight-section app shell with Overview/Inputs/
-Results/Tools & Technologies built and Learning/Glossary/References &
-Formulas/Real World left as clearly-marked placeholder panels (see
-`app/dashboard/pages.py`'s `_base_panels()` and
-`shell.render_placeholder_section`). Phase 8 writes the References &
-Formulas section and reviews the Results section's numbers/attribution
-logic post-restyle; Phase 9 builds the dual-register Learning content, the
-Glossary, and the Real World/Corporate Applications section — see
+Phase 8 hands off a seven-of-eight-section app shell — Overview/Inputs/
+Results/Tools & Technologies/References & Formulas all built —
+with Learning/Glossary/Real World still left as clearly-marked placeholder
+panels (see `app/dashboard/pages.py`'s `_base_panels()` and
+`shell.render_placeholder_section`). Phase 9 builds the dual-register
+Learning content, the Glossary, and the Real World/Corporate Applications
+section — it can cross-link to `§07 References & Formulas` for the
+underlying math rather than re-deriving it there — see
 [`docs/decisions/0004-phase3-dashboard-architecture.md`](docs/decisions/0004-phase3-dashboard-architecture.md)
 for return-attribution unit conventions (per-period, not annualized) and
 [`docs/roadmap.md`](docs/roadmap.md) for the full phase plan.
