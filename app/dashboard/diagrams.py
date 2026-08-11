@@ -271,10 +271,16 @@ def frontier_position_diagram() -> str:
         f'<text x="{lft_x:.1f}" y="{lft_y - 14:.1f}" font-size="11" text-anchor="middle" fill="var(--text-secondary)">Same return,</text>'
         f'<text x="{lft_x:.1f}" y="{lft_y - 2:.1f}" font-size="11" text-anchor="middle" fill="var(--text-secondary)">less risk</text>'
     )
+    # Same concentric-ring aperture marker as the real frontier chart's "current portfolio"
+    # point (`viz.py::frontier_chart`'s `shape == "iris"` case) -- this diagram is meant to
+    # teach how to read that exact chart, so its own current-position mark should look like
+    # the thing it's teaching, not a plain dot the real chart no longer uses.
     current_halo = f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="15" fill="var(--signal)" opacity="0.16" />'
     current_dot = (
-        f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="6" fill="var(--signal)" stroke="var(--surface-1)" stroke-width="2" />'
-        f'<text x="{cur_x + 12:.1f}" y="{cur_y + 20:.1f}" font-size="11.5" font-weight="700" '
+        f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="9" fill="none" stroke="var(--signal)" stroke-width="1.6" />'
+        f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="5.8" fill="none" stroke="var(--signal)" stroke-width="1.3" />'
+        f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="2.4" fill="var(--signal)" stroke="var(--surface-1)" stroke-width="1.5" />'
+        f'<text x="{cur_x + 15:.1f}" y="{cur_y + 20:.1f}" font-size="11.5" font-weight="700" '
         f'fill="var(--text-primary)">Your portfolio</text>'
     )
 

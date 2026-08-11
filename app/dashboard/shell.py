@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import json
 
-from app.dashboard import diagrams
+from app.dashboard import diagrams, mark
 from app.dashboard.viz import esc
 
 NAV_ITEMS: tuple[tuple[str, str], ...] = (
@@ -49,19 +49,14 @@ NAV_ITEMS: tuple[tuple[str, str], ...] = (
 FONT_LINKS = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 """
 
-# Inline SVG data-URI favicon (amber "FL" bracket mark on graphite) -- no extra static
-# asset needed, matches the masthead mark's shape/color exactly.
-FAVICON_LINK = (
-    '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,'
-    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E"
-    "%3Crect width='64' height='64' rx='12' fill='%230a0d13'/%3E"
-    "%3Crect x='6' y='6' width='52' height='52' rx='8' fill='none' stroke='%23f0a63e' stroke-width='3'/%3E"
-    "%3Ctext x='32' y='41' font-family='monospace' font-size='24' font-weight='700' fill='%23f0a63e' "
-    "text-anchor='middle'%3EFL%3C/text%3E%3C/svg%3E\">"
-)
+# Inline SVG data-URI favicon -- the aperture/focus-ring mark (decision 0012,
+# `app/dashboard/mark.py`), replacing the old "FL" bracket monogram. No extra
+# static asset needed; built from the same ring geometry as the masthead glyph
+# and the frontier chart's restyled "current portfolio" marker.
+FAVICON_LINK = f'<link rel="icon" type="image/svg+xml" href="{mark.favicon_data_uri()}">'
 
 DEFAULT_META_DESCRIPTION = (
     "Enter a portfolio and get CAPM beta, Fama-French factor loadings, and Markowitz "
@@ -99,11 +94,10 @@ body { margin: 0; }
   padding: 24px 18px 18px; border-right: 1px solid var(--border); display: flex; flex-direction: column;
   background: var(--page-plane); }
 .masthead { display: flex; align-items: center; gap: 11px; margin-bottom: 24px; }
-.masthead-mark { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
-  color: var(--signal); border: 1.5px solid var(--signal); border-radius: var(--radius-sm); width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center; flex: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 12%, transparent); }
-.masthead-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.15;
+.masthead-mark { color: var(--signal); width: 34px; height: 34px; display: flex; align-items: center;
+  justify-content: center; flex: none; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--signal) 35%, transparent)); }
+.masthead-mark svg { width: 100%; height: 100%; }
+.masthead-title { font-family: var(--font-display); font-size: 18px; font-weight: 500; line-height: 1.15;
   letter-spacing: -0.01em; }
 .masthead-tag { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px;
   color: var(--text-muted); }
@@ -131,9 +125,9 @@ body { margin: 0; }
 /* ---- Main content ---- */
 .app-main { flex: 1 1 auto; min-width: 0; padding: 34px 28px 80px; }
 .app-main-inner { max-width: 760px; margin: 0 auto; }
-.tab-panel h1 { font-family: var(--font-display); font-size: 27px; font-weight: 700; letter-spacing: -0.01em;
+.tab-panel h1 { font-family: var(--font-display); font-size: 27px; font-weight: 500; letter-spacing: -0.01em;
   margin: 0 0 4px; }
-.tab-panel h2 { font-family: var(--font-display); font-weight: 600; }
+.tab-panel h2 { font-family: var(--font-display); font-weight: 500; }
 .section-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono);
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--signal); margin: 0 0 10px; }
 .section-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
@@ -164,22 +158,26 @@ body { margin: 0; }
 .method-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;
   background: var(--page-plane); }
 .method-card .method-mark { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--signal); }
-.method-card h3 { font-family: var(--font-display); font-weight: 600; font-size: 15px; margin: 7px 0 4px; }
+  text-transform: uppercase; color: var(--text-muted); }
+.method-card h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 7px 0 4px; }
 .method-card p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
 .disclaimer-strip { font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 22px;
   padding-top: 14px; }
 
 /* ---- Sample quick-start (rule 8) ---- */
 .quickstart-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
-  background: color-mix(in srgb, var(--signal) 8%, var(--surface-1)); border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--border));
+  background: var(--surface-1); border: 1px solid var(--border);
   border-radius: var(--radius-md); padding: 14px 18px; margin: 0 0 22px; }
 .quickstart-banner .qs-copy { font-size: 13px; color: var(--text-secondary); max-width: 46ch; }
 .quickstart-banner .qs-copy strong { color: var(--text-primary); font-family: var(--font-mono); }
-.quickstart-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--signal); color: #fff;
-  border: none; border-radius: var(--radius-sm); padding: 10px 18px; font: inherit; font-weight: 600; font-size: 13.5px;
+/* Outline treatment, not filled -- the form's own "Run analysis" submit button is the
+   one solid-signal primary action on this tab; this is a secondary, faster alternative
+   path, not a competing primary (one-accent discipline, decision 0012 #4). */
+.quickstart-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--page-plane);
+  color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 17px;
+  font: inherit; font-family: var(--font-mono); font-weight: 500; font-size: 13px;
   cursor: pointer; text-decoration: none; flex: none; white-space: nowrap; }
-.quickstart-btn:hover { filter: brightness(1.08); }
+.quickstart-btn:hover { border-color: var(--signal); color: var(--signal); }
 
 /* ---- Share / export bar (rule 8) ---- */
 .share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface-1);
@@ -201,8 +199,8 @@ body { margin: 0; }
 .source-note { display: flex; gap: 10px; align-items: flex-start; background: var(--page-plane);
   border: 1px dashed var(--baseline); border-radius: var(--radius-sm); padding: 10px 13px; margin: 10px 0 18px;
   font-size: 12px; color: var(--text-secondary); line-height: 1.55; }
-.source-note .sn-mark { font-family: var(--font-mono); font-size: 10.5px; color: var(--signal); flex: none;
-  border: 1px solid var(--signal); border-radius: 4px; padding: 1px 6px; }
+.source-note .sn-mark { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); flex: none;
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
 .source-note strong { color: var(--text-primary); }
 
 /* ---- Placeholder sections (Phase 8/9) ---- */
@@ -216,7 +214,7 @@ body { margin: 0; }
 
 /* ---- Tools & Technologies ---- */
 .tool-groups { display: flex; flex-direction: column; gap: 18px; }
-.tool-group h3 { font-family: var(--font-display); font-size: 15.5px; margin: 0 0 8px; }
+.tool-group h3 { font-family: var(--font-display); font-weight: 500; font-size: 15.5px; margin: 0 0 8px; }
 .tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .tool-list li { font-size: 13px; color: var(--text-secondary); display: flex; gap: 8px; align-items: baseline; }
 .tool-list .tool-name { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-primary); font-weight: 600;
@@ -227,12 +225,12 @@ body { margin: 0; }
 .ref-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
   padding: 22px 24px 20px; }
 .ref-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-.ref-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0; font-weight: 600; }
+.ref-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0; font-weight: 500; }
 .ref-tag { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--signal); border: 1px solid var(--signal); border-radius: 999px; padding: 2px 8px; flex: none; }
+  color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; flex: none; }
 .ref-what { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin: 8px 0 4px; max-width: 66ch; }
 .formula-block { font-family: var(--font-mono); font-size: 15px; line-height: 1.7; background: var(--page-plane);
-  border: 1px solid var(--border); border-left: 3px solid var(--signal); border-radius: 6px;
+  border: 1px solid var(--border); border-left: 3px solid var(--baseline); border-radius: 6px;
   padding: 14px 18px; margin: 12px 0; overflow-x: auto; }
 .formula-block .fb-label { display: block; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px; }
@@ -253,14 +251,19 @@ body { margin: 0; }
 .learn-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
   padding: 22px 24px 20px; }
 .learn-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-.learn-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0; font-weight: 600; }
+.learn-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0; font-weight: 500; }
 .learn-tag { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; flex: none; }
 .learn-register { margin: 14px 0 0; }
 .learn-register-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase;
   letter-spacing: 0.05em; margin-bottom: 6px; display: block; }
 .learn-register.is-plain .learn-register-label { color: var(--signal-cool); }
-.learn-register.is-technical .learn-register-label { color: var(--signal); }
+/* Not `--signal` (decision 0012 #4's amber audit): measured live, this label repeats on
+   every one of the four Learning cards -- the register is already named in the label text
+   itself ("Technical"), so the color was pure repetition, not the view's one important
+   thing. Neutral here; `--signal-cool` stays on the "Plain language" label since that's a
+   distinct blue already established for chart use, not the accent under audit. */
+.learn-register.is-technical .learn-register-label { color: var(--text-muted); }
 .learn-register p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; max-width: 66ch; margin: 0; }
 .learn-register.is-plain p { color: var(--text-primary); }
 .learn-register p code { font-family: var(--font-mono); font-size: 12.5px; background: var(--page-plane);
@@ -278,20 +281,24 @@ body { margin: 0; }
 .glossary-group { display: flex; flex-direction: column; gap: 10px; }
 .glossary-group + .glossary-group { margin-top: 18px; padding-top: 22px; border-top: 1px dashed var(--baseline); }
 .glossary-group-head { margin-bottom: 2px; }
-.glossary-group-head h2 { font-family: var(--font-display); font-size: 16.5px; font-weight: 600; margin: 0 0 4px;
+.glossary-group-head h2 { font-family: var(--font-display); font-size: 16.5px; font-weight: 500; margin: 0 0 4px;
   color: var(--text-primary); }
 .glossary-group-head p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; max-width: 66ch;
   margin: 0 0 4px; }
 .glossary-entry { background: var(--surface-1); border: 1px solid var(--border); border-radius: 9px;
   padding: 16px 18px; }
-.glossary-term { font-family: var(--font-display); font-size: 15.5px; font-weight: 600; margin: 0 0 8px;
+.glossary-term { font-family: var(--font-display); font-size: 15.5px; font-weight: 500; margin: 0 0 8px;
   color: var(--text-primary); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .glossary-term .gt-where { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--text-muted); }
 .glossary-row { display: flex; gap: 10px; font-size: 12.5px; line-height: 1.6; margin-top: 6px; }
 .glossary-row .gr-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--text-muted); flex: none; width: 70px; padding-top: 1px; }
 .glossary-row.is-plain .gr-label { color: var(--signal-cool); }
-.glossary-row.is-technical .gr-label { color: var(--signal); }
+/* Not `--signal` (decision 0012 #4): measured live against the rendered Glossary tab, not
+   just the CSS -- 27 entries meant 27 amber labels on one view, the clearest actual
+   violation of one-accent-per-view discipline found in this audit. Neutral here for the
+   same reason as the Learning cards above. */
+.glossary-row.is-technical .gr-label { color: var(--text-muted); }
 .glossary-row p { margin: 0; color: var(--text-secondary); }
 .glossary-row.is-plain p { color: var(--text-primary); }
 .glossary-row p code { font-family: var(--font-mono); font-size: 12px; background: var(--page-plane);
@@ -301,7 +308,7 @@ body { margin: 0; }
 .rw-groups { display: flex; flex-direction: column; gap: 16px; }
 .rw-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
   padding: 22px 24px 20px; }
-.rw-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0 0 8px; font-weight: 600; }
+.rw-card h2 { font-family: var(--font-display); font-size: 17px; margin: 0 0 8px; font-weight: 500; }
 .rw-card p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; max-width: 66ch; margin: 0 0 10px; }
 .rw-card p:last-of-type { margin-bottom: 0; }
 .rw-tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
@@ -398,8 +405,37 @@ body { margin: 0; }
 /* ---- Results empty state ---- */
 .empty-results { border: 1px dashed var(--baseline); border-radius: var(--radius-lg); padding: 32px 30px;
   text-align: left; background: var(--surface-1); }
-.empty-results h2 { font-size: 19px; margin: 0 0 8px; font-family: var(--font-display); }
+.empty-results h2 { font-size: 19px; margin: 0 0 8px; font-family: var(--font-display); font-weight: 500; }
 .empty-results p { font-size: 13.5px; color: var(--text-secondary); max-width: 56ch; line-height: 1.6; }
+
+/* ---- Loading overlay: iris open/close (decision 0012 #3/#5) ----
+   OpenBB's first fetch against live data is genuinely slow (real network calls, not
+   mocked) and this app is a classic full-page form POST / GET navigation, not an
+   SPA/fetch flow -- there's no XHR progress event to hook. The overlay is shown by
+   `_shell_script` right before the browser hands off to a real navigation (the
+   holdings form's submit, or a `data-loading-trigger` quick-start link) and needs no
+   teardown of its own: the navigation itself replaces the whole document. The one
+   edge case is the bfcache restoring a frozen "is-visible" DOM on browser Back, handled
+   by clearing it on `pageshow`. This is the app's one deliberate motion exception
+   (decision 0012 #5) -- ties the wait state to the brand mark instead of a generic
+   spinner, the aperture literally opening and closing while data loads. */
+.iris-loading-overlay { position: fixed; inset: 0; z-index: 500; display: none; align-items: center;
+  justify-content: center; background: color-mix(in srgb, var(--page-plane) 90%, transparent);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.iris-loading-overlay.is-visible { display: flex; }
+.iris-loading-card { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  max-width: 280px; padding: 20px; }
+.iris-anim { animation: fl-iris-rotate 7s linear infinite; }
+.iris-anim .iris-core { animation: fl-iris-core-breathe 1.5s ease-in-out infinite; transform-origin: 32px 32px; }
+.iris-anim .iris-ring-mid { animation: fl-iris-mid-breathe 1.5s ease-in-out infinite; transform-origin: 32px 32px; }
+@keyframes fl-iris-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes fl-iris-core-breathe { 0%, 100% { r: 7; opacity: 1; } 50% { r: 2.5; opacity: 0.65; } }
+@keyframes fl-iris-mid-breathe { 0%, 100% { r: 16.5; } 50% { r: 11.5; } }
+.iris-loading-text { font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); font-weight: 500; }
+.iris-loading-sub { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) {
+  .iris-anim, .iris-anim .iris-core, .iris-anim .iris-ring-mid { animation: none; }
+}
 
 @media (max-width: 860px) {
   /* `align-items: flex-start` (set for the desktop row layout, cross-axis = height) needs to
@@ -658,6 +694,30 @@ def _shell_script() -> str:
     recalcAlloc();
   }
 
+  // ---- Loading overlay: iris open/close (Phase 10d, decision 0012) ----
+  // No fetch/XHR to hook -- this is a classic full-page form POST / GET navigation, so
+  // "loading" just means "about to navigate." Shown right before the browser hands off;
+  // the navigation itself (or, on failure, the server's own re-rendered error page) tears
+  // it down for free. `pageshow` covers the one case that doesn't: the bfcache restoring
+  // a frozen DOM that still has `is-visible` set if the user hits Back mid-load.
+  var loadingOverlay = document.querySelector('[data-loading-overlay]');
+  if (loadingOverlay) {
+    var showLoading = function () {
+      loadingOverlay.classList.add('is-visible');
+      loadingOverlay.setAttribute('aria-hidden', 'false');
+    };
+    document.querySelectorAll('form[data-loading-trigger]').forEach(function (f) {
+      f.addEventListener('submit', showLoading);
+    });
+    document.querySelectorAll('a[data-loading-trigger]').forEach(function (a) {
+      a.addEventListener('click', showLoading);
+    });
+    window.addEventListener('pageshow', function () {
+      loadingOverlay.classList.remove('is-visible');
+      loadingOverlay.setAttribute('aria-hidden', 'true');
+    });
+  }
+
   // ---- Shareable-link "copy" control (Phase 9c) ----
   document.querySelectorAll('[data-share-copy]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -790,7 +850,7 @@ def render_app_shell(
 <div class="app-shell">
   <aside class="app-sidebar">
     <div class="masthead">
-      <div class="masthead-mark">FL</div>
+      <div class="masthead-mark">{mark.aperture_svg(size=34, ring_color="var(--signal)", core_color="var(--signal)", stroke_width=2.3)}</div>
       <div>
         <div class="masthead-title">Factor Lens</div>
         <div class="masthead-tag">Factor attribution console</div>
@@ -804,6 +864,18 @@ def render_app_shell(
     </div>
   </aside>
   <main class="app-main">{''.join(panel_html)}</main>
+</div>
+<div class="iris-loading-overlay" data-loading-overlay aria-hidden="true" role="status" aria-live="polite">
+  <div class="iris-loading-card">
+    <svg class="iris-anim" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" focusable="false">
+      <circle class="iris-ring-outer" cx="32" cy="32" r="26" fill="none" stroke="var(--signal)" stroke-width="2.6" />
+      <circle class="iris-ring-mid" cx="32" cy="32" r="16.5" fill="none" stroke="var(--signal)" stroke-width="2" />
+      <circle class="iris-core" cx="32" cy="32" r="7" fill="var(--signal)" />
+    </svg>
+    <div class="iris-loading-text">Fetching live market data&hellip;</div>
+    <div class="iris-loading-sub">First load can take a few seconds &mdash; OpenBB and Kenneth French's Data
+    Library are being queried live, not read from a cache.</div>
+  </div>
 </div>
 {ticker_data_script}
 <script>{viz.CHART_SCRIPT}</script>
@@ -834,7 +906,7 @@ def render_overview_section() -> str:
   exposures, not a black-box score, a trading signal, or personalized investment advice.</p>
   <div class="hero-cta-row">
     <button type="button" class="hero-cta" data-tab-target="inputs">Enter your holdings →</button>
-    <a class="hero-cta-secondary" href="/dashboard/sample">▸ Run a live example</a>
+    <a class="hero-cta-secondary" href="/dashboard/sample" data-loading-trigger>▸ Run a live example</a>
   </div>
   <div class="method-grid">
     <div class="method-card">

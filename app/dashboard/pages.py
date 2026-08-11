@@ -107,11 +107,11 @@ ticker or company name), a date range, and a Fama-French model.</p>
 <div class="quickstart-banner">
   <div class="qs-copy">No tickers in mind? <strong>AAPL 40% / MSFT 30% / GOOGL 20% / AMZN 10%</strong> vs. the
   S&amp;P 500, run instantly on live data.</div>
-  <a class="quickstart-btn" href="/dashboard/sample">▸ Run the sample portfolio</a>
+  <a class="quickstart-btn" href="/dashboard/sample" data-loading-trigger>▸ Run the sample portfolio</a>
 </div>
 <div class="form-card">
   {error_html}
-  <form method="post" action="/dashboard">
+  <form method="post" action="/dashboard" data-loading-trigger>
     <div class="holdings-label">Holdings</div>
     <p class="alloc-explainer"><strong>Allocation</strong> is the percentage of your total portfolio each
     holding makes up &mdash; e.g. enter <strong>25</strong> if a holding is a quarter of your portfolio. All

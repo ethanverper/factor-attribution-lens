@@ -96,7 +96,7 @@ CHART_STYLE = """
   font-family: var(--font-body, 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif); }
 .viz-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
   box-shadow: var(--shadow-card); padding: 20px 22px; margin-bottom: 20px; }
-.viz-card h2 { font-family: var(--font-display, inherit); font-size: 17px; margin: 0 0 2px; font-weight: 600; }
+.viz-card h2 { font-family: var(--font-display, inherit); font-size: 17px; margin: 0 0 2px; font-weight: 500; }
 .viz-card .viz-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
 .viz-chart-wrap { overflow-x: auto; }
 .viz-chart-wrap svg { width: 100%; height: auto; display: block; min-width: 480px; }
@@ -134,8 +134,13 @@ CHART_STYLE = """
   border: 1px solid color-mix(in srgb, var(--series-1) 40%, var(--border)); border-radius: 8px;
   padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); margin-bottom: 14px; }
 .viz-stat-row { display: flex; flex-wrap: wrap; gap: 12px; }
+/* Neutral top border, not `--signal` (decision 0012 #4's amber audit): a Results page can
+   have 8-10 of these tiles at once (CAPM, Fama-French, frontier stats), and giving every
+   one an amber cap diluted the one-accent-per-view discipline to nothing -- amber now
+   reads only where it's actually the single most important mark on a view (the frontier
+   chart's "current portfolio" iris, the primary CTA, the active nav item). */
 .viz-stat-tile { flex: 1 1 150px; min-width: 140px; background: var(--page-plane); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 14px 11px; border-top: 2px solid var(--series-2); }
+  border-radius: 8px; padding: 12px 14px 11px; border-top: 2px solid var(--border); }
 .viz-stat-tile .stat-label { font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase;
   letter-spacing: 0.05em; margin-bottom: 6px; font-family: var(--font-mono, ui-monospace); }
 .viz-stat-tile .stat-value { font-size: 27px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums;
@@ -586,6 +591,23 @@ def frontier_chart(
                 f'<rect x="{x - r:.2f}" y="{y - r:.2f}" width="{r * 2}" height="{r * 2}" fill="{color}" '
                 f'stroke="var(--surface-1)" stroke-width="2" transform="rotate(45 {x:.2f} {y:.2f})" />'
             )
+        if shape == "iris":
+            # The functional aperture/focus-ring mark (decision 0012 #3): same concentric-ring
+            # proportions as the masthead glyph and favicon (`mark.py::_rings_markup`), scaled
+            # for chart use and reproduced directly in SVG-attribute terms here rather than
+            # imported, since this chart's marks are plotted in chart pixel space (`x`/`y`
+            # already resolved from the data), not the fixed local viewBox `mark.py` assumes.
+            # `r` is the marker's full visual (outer-ring) radius, matching how GMV/max-Sharpe's
+            # `r` is used for label-offset/hover-target sizing elsewhere in this function.
+            outer_r, mid_r, core_r = r, r * 0.64, r * 0.27
+            return (
+                f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{outer_r:.2f}" fill="none" stroke="{color}" '
+                f'stroke-width="1.6" />'
+                f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{mid_r:.2f}" fill="none" stroke="{color}" '
+                f'stroke-width="1.3" />'
+                f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{core_r:.2f}" fill="{color}" '
+                f'stroke="var(--surface-1)" stroke-width="1.5" />'
+            )
         return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{color}" stroke="var(--surface-1)" stroke-width="2" />'
 
     def marker_hover_svg(point: FrontierPointVM, full_label: str, tt_extra: str) -> str:
@@ -613,7 +635,7 @@ def frontier_chart(
         })
     marker_specs.append({
         "point": current, "short": "Your portfolio", "full": "Your portfolio",
-        "color": "var(--series-2)", "shape": "circle", "r": 6,
+        "color": "var(--series-2)", "shape": "iris", "r": 9,
         "tt_extra": f"volatility {fmt_pct(current.volatility, 2)} · Sharpe {fmt_ratio(current.sharpe)}",
     })
     for spec in marker_specs:

@@ -87,6 +87,26 @@ def test_no_max_sharpe_still_handles_gmv_and_current_collision():
     assert labels[0]["text"] == "GMV = Your portfolio"
 
 
+def test_current_portfolio_marker_is_iris_not_flat_dot():
+    """Phase 10d / decision 0012 #3: the 'current portfolio' marker must be the
+    functional aperture/focus-ring glyph (three concentric circles centered on the
+    point) rather than the flat single-circle dot it used to be -- GMV/max-Sharpe
+    stay plain marks (they aren't the app's own identity motif)."""
+    current = FrontierPointVM(volatility=0.22, ret=0.11, sharpe=0.5)
+    gmv = FrontierPointVM(volatility=0.10, ret=0.05, sharpe=0.3)
+    max_sharpe = FrontierPointVM(volatility=0.30, ret=0.16, sharpe=0.55)
+    svg = frontier_chart([], current=current, gmv=gmv, max_sharpe=max_sharpe, frontier_return_at_current_vol=None)
+
+    # Three concentric circles sharing the current point's exact pixel center, all
+    # stroked/filled with the signal accent (`var(--series-2)`).
+    signal_circles = re.findall(r'<circle[^>]*fill="var\(--series-2\)"[^>]*/>', svg)
+    ring_circles = re.findall(
+        r'<circle[^>]*fill="none"[^>]*stroke="var\(--series-2\)"[^>]*/>', svg
+    )
+    assert len(ring_circles) >= 2, "expected at least two concentric signal-colored rings for the iris marker"
+    assert len(signal_circles) >= 1, "expected a filled signal-colored core circle for the iris marker"
+
+
 def test_far_apart_markers_keep_independent_labels_and_right_edge_flip():
     """Baseline (non-colliding) case must still behave as before: three independent
     labels, and a marker near the plot's right edge flips its label leftward instead

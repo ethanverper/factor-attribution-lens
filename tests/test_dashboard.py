@@ -313,6 +313,31 @@ def test_dashboard_view_rejects_invalid_ticker():
     assert "not in the curated ticker universe" in resp.text
 
 
+def test_dashboard_page_has_iris_loading_overlay_wired_to_slow_fetch_triggers():
+    """Phase 10d / decision 0012 #3, #5: OpenBB's first fetch is a genuinely slow live
+    network call and this app has no fetch/XHR to hook a progress indicator off of --
+    the loading state has to be a full-page overlay armed before the browser navigates.
+    Must be present on the shell (both GET / and results pages share it) and wired to
+    every entry point that triggers a live fetch: the holdings form and both sample
+    quick-start links."""
+    resp = client.get("/")
+    body = resp.text
+    assert 'data-loading-overlay' in body
+    assert 'class="iris-anim"' in body
+    assert body.count("data-loading-trigger") >= 3  # form + overview CTA + inputs quickstart link
+
+
+def test_dashboard_form_has_aperture_mark_and_favicon_not_old_fl_monogram():
+    """Phase 10d / decision 0012 #2: the old 'FL' bracket-box favicon/masthead is gone,
+    replaced by the aperture/focus-ring glyph -- both built from the same construction
+    (`app/dashboard/mark.py`) so the identity is one system, not two coincidental marks."""
+    resp = client.get("/")
+    body = resp.text
+    assert '<div class="masthead-mark">FL</div>' not in body
+    assert 'class="masthead-mark"><svg' in body
+    assert "data:image/svg+xml," in body  # favicon link, still a data-URI SVG
+
+
 def test_dashboard_page_has_og_and_social_preview_meta():
     resp = client.get("/")
     body = resp.text
