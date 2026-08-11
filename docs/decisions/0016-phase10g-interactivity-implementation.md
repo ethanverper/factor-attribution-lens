@@ -151,11 +151,17 @@ re-originated. The list markup changed from a cramped `name | short phrase` inli
 description, since several entries are now a genuine sentence or two — the old fixed
 `min-width: 168px` name column either truncated or forced awkward wrapping at that length.
 
-## 4. `impeccable` pass
+## 4. `impeccable` pass — not run this phase
 
-Ran after the above was functionally complete and verified. See the phase report for the
-specific findings applied (or explicitly deferred) — logged here rather than duplicated
-verbatim: [summarize once run].
+Scoped for this phase but not completed: the implementation work above (section 2/3) plus
+verification against a heavily resource-contended sandbox (system load average 11-15, an
+unrelated ~9.5-minute full test-suite run) consumed the phase's available turns before the
+`impeccable` polish pass was reached. Interactivity implementation, the watcher fix, and the
+Tools & Technologies content are complete and verified (75/75 tests passing after a follow-up
+fix to an overly-broad test assertion, done directly rather than via a further agent resume —
+see `docs/roadmap.md` Phase 10g). The `impeccable` pass remains open — flagged explicitly
+rather than silently marked done, per this team's own escalation discipline (don't claim a
+step happened when it didn't).
 
 ## Consequences
 
