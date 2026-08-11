@@ -221,6 +221,14 @@ body { margin: 0; }
   border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary); }
 .holdings-label { font-family: var(--font-mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--text-secondary); margin: 20px 0 8px; }
+.alloc-explainer { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 12px; max-width: 62ch; }
+.alloc-explainer strong { color: var(--text-primary); font-family: var(--font-mono); font-weight: 600; }
+.holdings-col-labels { display: flex; gap: 10px; margin: 0 0 6px; }
+.holdings-col-labels span { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted); }
+.holdings-col-labels .hcl-ticker { flex: 1 1 auto; }
+.holdings-col-labels .hcl-weight { flex: 0 1 130px; }
+.holdings-col-labels .hcl-spacer { flex: 0 0 34px; }
 .holding-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
 .holding-row .field { flex: 1 1 auto; }
 .holding-row input[name="weight"] { width: 100%; font-family: var(--font-mono); }
@@ -228,11 +236,30 @@ body { margin: 0; }
 .row-remove { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted);
   width: 34px; height: 38px; cursor: pointer; font-size: 15px; flex: none; }
 .row-remove:hover { color: var(--diverging-neg); }
-.add-row-btn { background: transparent; border: 1px dashed var(--baseline); border-radius: 6px;
+.holdings-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+.add-row-btn, .helper-btn { background: transparent; border: 1px dashed var(--baseline); border-radius: 6px;
   color: var(--text-secondary); padding: 7px 12px; font-size: 12.5px; cursor: pointer; margin-top: 2px; font: inherit; }
+.helper-btn { border-style: solid; }
+.helper-btn:hover { border-color: var(--signal); color: var(--signal); }
+.alloc-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 14px;
+  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--page-plane); }
+.alloc-total-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-muted); }
+.alloc-total-value { font-family: var(--font-mono); font-weight: 700; font-size: 15px; color: var(--text-primary); }
+.alloc-total-msg { color: var(--text-secondary); font-size: 12.5px; }
+.alloc-total[data-state="exact"] { border-color: color-mix(in srgb, var(--status-good) 45%, var(--border));
+  background: color-mix(in srgb, var(--status-good) 10%, var(--surface-1)); }
+.alloc-total[data-state="exact"] .alloc-total-value { color: var(--status-good); }
+.alloc-total[data-state="under"] { border-color: color-mix(in srgb, var(--status-warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--status-warning) 12%, var(--surface-1)); }
+.alloc-total[data-state="under"] .alloc-total-value { color: var(--status-warning); }
+.alloc-total[data-state="over"] { border-color: color-mix(in srgb, var(--diverging-neg) 45%, var(--border));
+  background: color-mix(in srgb, var(--diverging-neg) 10%, var(--surface-1)); }
+.alloc-total[data-state="over"] .alloc-total-value { color: var(--diverging-neg); }
 .submit-btn { background: var(--signal); color: white; border: none; border-radius: 7px; padding: 12px 24px;
   font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; font: inherit; }
 .submit-btn:hover { filter: brightness(1.06); }
+.submit-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 .error-banner { background: color-mix(in srgb, var(--diverging-neg) 12%, var(--surface-1));
   border: 1px solid color-mix(in srgb, var(--diverging-neg) 40%, var(--border)); border-radius: 8px;
   padding: 12px 14px; font-size: 13px; color: var(--text-primary); margin-bottom: 18px; }
@@ -397,6 +424,106 @@ def _shell_script() -> str:
       var rows = document.getElementById('holdings-rows').querySelectorAll('[data-combobox]');
       window.__flInitCombobox(rows[rows.length - 1]);
     });
+  }
+
+  // ---- Allocation total, "split evenly" / "normalize" helpers (Phase 9b) ----
+  var rowsContainer = document.getElementById('holdings-rows');
+  var allocTotal = document.getElementById('alloc-total');
+  if (rowsContainer && allocTotal) {
+    var allocValueEl = document.getElementById('alloc-total-value');
+    var allocMsgEl = document.getElementById('alloc-total-msg');
+    var submitBtn = document.getElementById('run-analysis-btn');
+
+    function activeWeightRows() {
+      return Array.prototype.filter.call(rowsContainer.querySelectorAll('.holding-row'), function (row) {
+        var hidden = row.querySelector('[data-combobox-value]');
+        return !!(hidden && hidden.value);
+      });
+    }
+
+    function round2(n) { return Math.round(n * 100) / 100; }
+
+    function recalcAlloc() {
+      var inputs = rowsContainer.querySelectorAll('input[name="weight"]');
+      var total = 0;
+      var anyFilled = false;
+      inputs.forEach(function (inp) {
+        if (inp.value.trim() !== '') anyFilled = true;
+        var v = parseFloat(inp.value);
+        if (!isNaN(v)) total += v;
+      });
+      total = round2(total);
+      allocValueEl.textContent = total + '%';
+      var diff = round2(100 - total);
+      var state;
+      if (!anyFilled) {
+        state = 'empty';
+        allocMsgEl.textContent = 'Enter an allocation for each holding \\u2014 they must add up to 100%.';
+      } else if (Math.abs(diff) < 0.05) {
+        state = 'exact';
+        allocMsgEl.textContent = 'Ready to submit.';
+      } else if (diff > 0) {
+        state = 'under';
+        allocMsgEl.textContent = 'Add ' + diff + '% more to reach 100%.';
+      } else {
+        state = 'over';
+        allocMsgEl.textContent = 'Remove ' + Math.abs(diff) + '% to reach 100%.';
+      }
+      allocTotal.setAttribute('data-state', state);
+      if (submitBtn) {
+        submitBtn.disabled = state !== 'exact';
+        submitBtn.setAttribute('aria-disabled', state !== 'exact' ? 'true' : 'false');
+      }
+    }
+    window.__flRecalcAlloc = recalcAlloc;
+
+    rowsContainer.addEventListener('input', function (e) {
+      if (e.target && e.target.name === 'weight') recalcAlloc();
+    });
+
+    var splitBtn = document.getElementById('split-evenly-btn');
+    if (splitBtn) {
+      splitBtn.addEventListener('click', function () {
+        var rows = activeWeightRows();
+        if (!rows.length) return;
+        var base = Math.floor((100 / rows.length) * 100) / 100;
+        var assigned = 0;
+        rows.forEach(function (row, i) {
+          var input = row.querySelector('input[name="weight"]');
+          var val = (i === rows.length - 1) ? round2(100 - assigned) : base;
+          assigned = round2(assigned + val);
+          input.value = val;
+        });
+        recalcAlloc();
+      });
+    }
+
+    var normBtn = document.getElementById('normalize-btn');
+    if (normBtn) {
+      normBtn.addEventListener('click', function () {
+        var rows = activeWeightRows();
+        if (!rows.length) return;
+        var values = rows.map(function (row) {
+          var v = parseFloat(row.querySelector('input[name="weight"]').value);
+          return (!isNaN(v) && v > 0) ? v : 0;
+        });
+        var sum = values.reduce(function (a, b) { return a + b; }, 0);
+        if (sum <= 0) {
+          if (splitBtn) splitBtn.click();
+          return;
+        }
+        var assigned = 0;
+        rows.forEach(function (row, i) {
+          var input = row.querySelector('input[name="weight"]');
+          var val = (i === rows.length - 1) ? round2(100 - assigned) : round2((values[i] / sum) * 100);
+          assigned = round2(assigned + val);
+          input.value = val;
+        });
+        recalcAlloc();
+      });
+    }
+
+    recalcAlloc();
   }
 })();
 """

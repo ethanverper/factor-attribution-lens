@@ -15,6 +15,11 @@ untouched, only the surrounding chrome changed.
 Plain Python string templates, not Jinja2 -- see decision 0004 for why (still
 holds; Phase 7 doesn't add branching complex enough to revisit it). Every
 user-originated string is passed through `viz.esc` before interpolation.
+
+Phase 9b: the holdings form's `weight` field is presented and typed as a
+percentage (0-100, e.g. "25" for 25%), not the raw 0-1 fraction Phase 1's
+`HoldingInput.weight` contract uses -- `app/dashboard/routes.py` converts at
+the form boundary. See `docs/decisions/0007-phase9b-allocation-percent-ux.md`.
 """
 from __future__ import annotations
 
@@ -36,6 +41,13 @@ _TICKER_DATA_SCRIPT = shell.render_ticker_data_script(
 # ---------------------------------------------------------------------------
 
 
+def _weight_to_pct_str(weight: float) -> str:
+    """Render a Phase 1 fraction weight (0-1) as the percent string the Inputs form displays."""
+    pct = round(weight * 100, 4)
+    text = f"{pct:.4f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def _holding_row_html(symbol: str = "", weight: str = "") -> str:
     label = tickers.ticker_name(symbol) if symbol else None
     combobox = shell.render_combobox(
@@ -49,10 +61,11 @@ def _holding_row_html(symbol: str = "", weight: str = "") -> str:
         '<div class="holding-row">'
         f'<div class="field">{combobox}</div>'
         '<div class="field weight-field">'
-        f'<input type="number" name="weight" placeholder="0.00–1.00" step="0.0001" min="0" max="1" value="{esc(weight)}">'
+        f'<input type="number" name="weight" placeholder="e.g. 25" step="0.01" min="0" max="100" '
+        f'inputmode="decimal" aria-label="Allocation percentage" value="{esc(weight)}">'
         "</div>"
         '<button type="button" class="row-remove" aria-label="Remove holding" '
-        "onclick=\"this.parentElement.remove()\">×</button>"
+        "onclick=\"this.parentElement.remove(); if (window.__flRecalcAlloc) window.__flRecalcAlloc();\">×</button>"
         "</div>"
     )
 
@@ -89,13 +102,30 @@ def _inputs_panel(
 <div class="section-eyebrow">§02 · Inputs</div>
 <h1>Portfolio &amp; benchmark</h1>
 <p class="section-lede">Choose holdings and a benchmark from the curated large-cap universe below (search by
-ticker or company name), a date range, and a Fama-French model. Weights must sum to 1.0.</p>
+ticker or company name), a date range, and a Fama-French model.</p>
 <div class="form-card">
   {error_html}
   <form method="post" action="/dashboard">
     <div class="holdings-label">Holdings</div>
+    <p class="alloc-explainer"><strong>Allocation</strong> is the percentage of your total portfolio each
+    holding makes up &mdash; e.g. enter <strong>25</strong> if a holding is a quarter of your portfolio. All
+    holdings' allocations together must add up to exactly 100%.</p>
+    <div class="holdings-col-labels" aria-hidden="true">
+      <span class="hcl-ticker">Ticker</span>
+      <span class="hcl-weight">Allocation %</span>
+      <span class="hcl-spacer"></span>
+    </div>
     <div id="holdings-rows">{rows}</div>
-    <button type="button" class="add-row-btn" id="add-holding-btn">+ Add holding</button>
+    <div class="holdings-toolbar">
+      <button type="button" class="add-row-btn" id="add-holding-btn">+ Add holding</button>
+      <button type="button" class="helper-btn" id="split-evenly-btn">Split evenly</button>
+      <button type="button" class="helper-btn" id="normalize-btn">Normalize to 100%</button>
+    </div>
+    <div class="alloc-total" id="alloc-total" data-state="empty">
+      <span class="alloc-total-label">Total allocated</span>
+      <span class="alloc-total-value" id="alloc-total-value">0%</span>
+      <span class="alloc-total-msg" id="alloc-total-msg">Enter an allocation for each holding &mdash; they must add up to 100%.</span>
+    </div>
 
     <div class="field-row" style="margin-top:22px;">
       <div class="field">
@@ -127,7 +157,7 @@ ticker or company name), a date range, and a Fama-French model. Weights must sum
         <input type="date" id="end_date" name="end_date" value="{esc(end_date.isoformat() if end_date else '')}">
       </div>
     </div>
-    <button type="submit" class="submit-btn">Run analysis</button>
+    <button type="submit" class="submit-btn" id="run-analysis-btn">Run analysis</button>
   </form>
   <p class="form-footnote">Data sources: yfinance (via the OpenBB Open Data Platform) for equity/benchmark
   prices, Kenneth French's Data Library for factor returns. The efficient frontier is long-only by default.
@@ -230,7 +260,7 @@ def render_dashboard_page(
 
     inputs_html = _inputs_panel(
         symbols=[h.symbol for h in meta.holdings],
-        weights=[str(h.weight) for h in meta.holdings],
+        weights=[_weight_to_pct_str(h.weight) for h in meta.holdings],
         benchmark=meta.benchmark,
         start_date=meta.requested_start_date,
         end_date=meta.requested_end_date,

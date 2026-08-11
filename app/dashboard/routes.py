@@ -17,6 +17,14 @@ the browser entirely (a hand-crafted POST) is still checked server-side
 before it ever reaches Phase 1's `PortfolioRequest`/`build_portfolio_return_data` --
 per `docs/project-standards.md`'s "invalid values in a constrained field
 shouldn't be able to reach the backend at all."
+
+Phase 9b: the submitted `weight` form field is a percentage (0-100), matching
+what the Inputs form now shows/collects -- this handler converts each to the
+0-1 fraction `HoldingInput.weight` expects before it ever reaches Phase 1's
+schema, and checks the allocations sum to 100% (with a plain-language error)
+ahead of `PortfolioRequest`'s own fraction-sum-to-1.0 check, which still runs
+as a defense-in-depth backstop for a hand-crafted POST that skips this loop
+entirely.
 """
 from __future__ import annotations
 
@@ -83,24 +91,40 @@ async def dashboard_submit(
         return HTMLResponse(html, status_code=status_code)
 
     holdings: list[HoldingInput] = []
+    total_pct = 0.0
     for raw_symbol, raw_weight in zip(symbol, weight):
         raw_symbol = raw_symbol.strip()
         raw_weight = raw_weight.strip()
         if not raw_symbol and not raw_weight:
             continue
         if not raw_symbol or not raw_weight:
-            return re_render_form(f"Holding row with '{raw_symbol or raw_weight}' needs both a symbol and a weight.", 400)
+            return re_render_form(
+                f"Holding row with '{raw_symbol or raw_weight}' needs both a symbol and an allocation.", 400
+            )
         if not tickers.is_valid_ticker(raw_symbol):
             return re_render_form(
                 f"'{raw_symbol}' is not in the curated ticker universe. Choose a holding from the search list.", 400
             )
         try:
-            holdings.append(HoldingInput(symbol=raw_symbol, weight=float(raw_weight)))
-        except (ValueError, ValidationError) as exc:
+            pct = float(raw_weight)
+        except ValueError:
+            return re_render_form(f"'{raw_weight}' is not a valid allocation for '{raw_symbol}'.", 400)
+        if not (0 < pct <= 100):
+            return re_render_form(f"Allocation for '{raw_symbol}' must be greater than 0 and no more than 100%.", 400)
+        total_pct += pct
+        try:
+            holdings.append(HoldingInput(symbol=raw_symbol, weight=pct / 100))
+        except ValidationError as exc:
             return re_render_form(f"Invalid holding '{raw_symbol}': {exc}", 400)
 
     if not holdings:
         return re_render_form("Enter at least one holding.", 400)
+
+    if abs(total_pct - 100) > 0.1:
+        return re_render_form(
+            f"Your allocations add up to {total_pct:.1f}%, not 100%. Adjust the weights so they total 100% before submitting.",
+            400,
+        )
 
     if not tickers.is_valid_benchmark(benchmark):
         return re_render_form(

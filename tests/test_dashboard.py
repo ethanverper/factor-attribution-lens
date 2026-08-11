@@ -31,10 +31,55 @@ def test_dashboard_form_renders():
     assert 'name="weight"' in resp.text
 
 
+def test_dashboard_form_explains_allocation_and_shows_live_total():
+    """Phase 9b: the weight field must be self-explanatory, not a bare unlabeled number input."""
+    resp = client.get("/")
+    body = resp.text
+    assert "Allocation" in body
+    assert "percentage of your total portfolio" in body
+    assert 'id="alloc-total"' in body
+    assert 'id="alloc-total-value"' in body
+    assert 'id="split-evenly-btn"' in body
+    assert 'id="normalize-btn"' in body
+    # The weight input now collects a percent (0-100), not a 0-1 fraction.
+    assert 'max="100"' in body
+
+
+def test_dashboard_submit_rejects_allocations_not_summing_to_100():
+    payload = {
+        "symbol": ["AAPL", "MSFT"],
+        "weight": ["50", "30"],  # totals 80%, not 100%
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 400
+    assert "add up to 80.0%" in resp.text
+    assert "100%" in resp.text
+
+
+def test_dashboard_submit_rejects_out_of_range_allocation():
+    payload = {
+        "symbol": ["AAPL", "MSFT"],
+        "weight": ["150", "-30"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 400
+    assert "must be greater than 0 and no more than 100%" in resp.text
+
+
 def test_dashboard_submit_end_to_end():
     payload = {
         "symbol": ["AAPL", "MSFT", "GOOGL"],
-        "weight": ["0.5", "0.3", "0.2"],
+        "weight": ["50", "30", "20"],
         "benchmark": "^GSPC",
         "start_date": START.isoformat(),
         "end_date": END.isoformat(),
@@ -62,6 +107,12 @@ def test_dashboard_submit_end_to_end():
 
     # Live data freshness is stated, not silently omitted.
     assert "Data as of" in body
+
+    # Phase 9b: the re-shown Inputs form echoes weights back as percents (matching what was
+    # typed), not the raw 0-1 fractions Phase 1's HoldingInput stores internally.
+    assert 'value="50"' in body
+    assert 'value="30"' in body
+    assert 'value="20"' in body
 
 
 def test_return_attribution_identity_holds():
