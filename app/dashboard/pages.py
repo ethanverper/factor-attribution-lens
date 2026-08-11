@@ -501,34 +501,8 @@ def _base_panels() -> dict[str, str]:
     return {
         "overview": shell.render_overview_section(),
         "tools": shell.render_tools_section(),
-        "learning": shell.render_placeholder_section(
-            tab_id="learning",
-            title="Learning",
-            phase_label="Phase 9 (educator)",
-            owner="educator",
-            body=(
-                "Dual-register explanations (technical + plain-language) of what your beta, factor loadings, "
-                "and frontier position actually mean for your portfolio &mdash; embedded here, next to the "
-                "numbers they explain, not in a docs folder nobody visiting the site would see."
-            ),
-        ),
-        "glossary": shell.render_placeholder_section(
-            tab_id="glossary",
-            title="Glossary",
-            phase_label="Phase 9 (educator)",
-            owner="educator",
-            body="Terms used throughout this project, defined both technically and in plain language.",
-        ),
+        "learning": shell.render_learning_section(),
+        "glossary": shell.render_glossary_section(),
         "references": shell.render_references_section(),
-        "real-world": shell.render_placeholder_section(
-            tab_id="real-world",
-            title="Real World / Corporate Applications",
-            phase_label="Phase 9 (educator)",
-            owner="educator",
-            body=(
-                "How factor attribution and portfolio optimization tooling like this is actually used in "
-                "industry &mdash; Barra/Axioma-style risk desks, RIA client reporting, and where this project "
-                "fits in that landscape."
-            ),
-        ),
+        "real-world": shell.render_real_world_section(),
     }
