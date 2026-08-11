@@ -24,6 +24,7 @@ the form boundary. See `docs/decisions/0007-phase9b-allocation-percent-ux.md`.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from urllib.parse import urlencode
 
 from app.dashboard import shell, tickers, viz
 from app.dashboard.attribution import FACTOR_LABELS, RiskAttribution, ReturnAttribution
@@ -99,10 +100,15 @@ def _inputs_panel(
     )
 
     return f"""
-<div class="section-eyebrow">§02 · Inputs</div>
+<div class="section-eyebrow">[02] Inputs</div>
 <h1>Portfolio &amp; benchmark</h1>
 <p class="section-lede">Choose holdings and a benchmark from the curated large-cap universe below (search by
 ticker or company name), a date range, and a Fama-French model.</p>
+<div class="quickstart-banner">
+  <div class="qs-copy">No tickers in mind? <strong>AAPL 40% / MSFT 30% / GOOGL 20% / AMZN 10%</strong> vs. the
+  S&amp;P 500, run instantly on live data.</div>
+  <a class="quickstart-btn" href="/dashboard/sample">▸ Run the sample portfolio</a>
+</div>
 <div class="form-card">
   {error_html}
   <form method="post" action="/dashboard">
@@ -110,6 +116,15 @@ ticker or company name), a date range, and a Fama-French model.</p>
     <p class="alloc-explainer"><strong>Allocation</strong> is the percentage of your total portfolio each
     holding makes up &mdash; e.g. enter <strong>25</strong> if a holding is a quarter of your portfolio. All
     holdings' allocations together must add up to exactly 100%.</p>
+    <div class="source-note">
+      <span class="sn-mark">source</span>
+      <span>Ticker and benchmark options are drawn from a <strong>curated S&amp;P 500 constituent snapshot</strong>
+      (~496 symbols, mirroring the official index list) plus a small set of major index/ETF benchmarks &mdash;
+      not a live index-membership feed, so it can drift from the current S&amp;P 500 roster over time. A holding
+      outside this list (a small-cap, an ADR, a non-US listing) can't be entered yet, even if it trades on
+      Yahoo Finance/yfinance. See <code>docs/decisions/0005-phase7-ticker-universe.md</code> for the full
+      sourcing and refresh policy.</span>
+    </div>
     <div class="holdings-col-labels" aria-hidden="true">
       <span class="hcl-ticker">Ticker</span>
       <span class="hcl-weight">Allocation %</span>
@@ -178,6 +193,7 @@ def render_form_page(
     end_date: date | None = None,
     factor_model: str = "3",
     frequency: str = "daily",
+    request_base_url: str = "",
 ) -> str:
     inputs_html = _inputs_panel(
         error=error,
@@ -198,6 +214,8 @@ def render_form_page(
         panels=panels,
         page_title="Factor Lens — Portfolio attribution",
         ticker_data_script=_TICKER_DATA_SCRIPT,
+        request_base_url=request_base_url,
+        canonical_path="/",
     )
 
 
@@ -208,7 +226,7 @@ def render_form_page(
 
 def _results_empty_panel() -> str:
     return """
-<div class="section-eyebrow">§03 · Results</div>
+<div class="section-eyebrow">[03] Results</div>
 <h1>Results</h1>
 <div class="empty-results">
   <h2>No analysis yet</h2>
@@ -219,11 +237,33 @@ def _results_empty_panel() -> str:
 """
 
 
+def _build_share_path(meta) -> str:
+    """The GET-able permalink that reproduces this exact configuration (holdings, benchmark,
+    requested date range, factor model, frequency) through `GET /dashboard/view` -- see
+    decision 0008. Used both for the Results tab's "Copy shareable link" control and as this
+    page's `og:url`/canonical, since it's the actual fetchable resource for this result even
+    when the page was first reached via `POST /dashboard`."""
+    params = []
+    for h in meta.holdings:
+        params.append(("symbol", h.symbol))
+        params.append(("weight", _weight_to_pct_str(h.weight)))
+    params += [
+        ("benchmark", meta.benchmark),
+        ("start_date", meta.requested_start_date.isoformat()),
+        ("end_date", meta.requested_end_date.isoformat()),
+        ("factor_model", meta.factor_model),
+        ("frequency", meta.frequency),
+    ]
+    return "/dashboard/view?" + urlencode(params)
+
+
 def render_dashboard_page(
     data: PortfolioReturnData,
     analysis: PortfolioAnalysis,
     return_attribution: ReturnAttribution,
     risk_attribution: RiskAttribution,
+    *,
+    request_base_url: str = "",
 ) -> str:
     meta = data.meta
     capm = analysis.capm
@@ -232,9 +272,11 @@ def render_dashboard_page(
     cp = ef.current_portfolio
 
     holdings_str = ", ".join(f"{h.symbol} {viz.fmt_pct(h.weight, 1)}" for h in meta.holdings)
+    share_path = _build_share_path(meta)
+    share_url_abs = f"{request_base_url.rstrip('/')}{share_path}" if request_base_url else share_path
 
     freshness = f"""
-<div class="section-eyebrow">§03 · Results</div>
+<div class="section-eyebrow">[03] Results</div>
 <h1>Attribution results</h1>
 <div class="freshness-banner">
   <div><strong>Portfolio:</strong> {esc(holdings_str)} &nbsp;·&nbsp; <strong>Benchmark:</strong> {esc(meta.benchmark)}
@@ -247,6 +289,18 @@ def render_dashboard_page(
   recommendation to buy, sell, or rebalance, and not a signal of any kind — it describes where your
   as-entered portfolio sits relative to modeled benchmarks and factors, historically.</div>
 </div>
+<div class="share-bar">
+  <span class="share-bar-label">Share this result</span>
+  <button type="button" class="share-btn" data-share-copy>&#128279; Copy shareable link</button>
+  <button type="button" class="share-btn" onclick="window.print()">&#8681; Export as PDF</button>
+  <span class="share-copied-note">Copied</span>
+  <div class="share-link-row">
+    <input type="text" class="share-link-input" readonly value="{esc(share_url_abs)}" aria-label="Shareable link to this result" onclick="this.select()">
+  </div>
+</div>
+<p class="form-footnote" style="margin-top:-10px;">Opening the shareable link re-runs this exact holdings/benchmark/date-range
+configuration against live data &mdash; it's a permalink to the configuration, not a frozen snapshot, so the numbers can
+shift slightly day to day. "Export as PDF" uses your browser's print dialog (choose "Save as PDF" as the destination).</p>
 """
 
     exposure_section = _render_exposure_section(capm, ff)
@@ -272,11 +326,21 @@ def render_dashboard_page(
     panels["inputs"] = inputs_html
     panels["results"] = results_html
 
+    # Plain text, not HTML -- `render_app_shell` HTML-escapes this once itself for the meta
+    # tags it appears in, so it must not be pre-escaped here (that would double-escape).
+    meta_description = (
+        f"CAPM beta, Fama-French {meta.factor_model}-factor loadings, and Markowitz efficient-frontier "
+        f"positioning for {holdings_str} vs. {meta.benchmark}, computed live from real market data."
+    )
+
     return shell.render_app_shell(
         active_tab="results",
         panels=panels,
         page_title="Factor Lens — Attribution Dashboard",
         ticker_data_script=_TICKER_DATA_SCRIPT,
+        request_base_url=request_base_url,
+        meta_description=meta_description,
+        canonical_path=share_path,
     )
 
 

@@ -1,15 +1,19 @@
-"""Phase 7 app shell: sidebar navigation, tab panels, and the constrained
-ticker/benchmark combobox component.
+"""App shell: sidebar navigation, tab panels, and the constrained
+ticker/benchmark combobox component. Originally built in Phase 7; the visual
+design system below is Phase 9c's redesign (`docs/decisions/0008-...md`).
 
-Design system: a "research memo" reading -- a serif display face (Fraunces)
-for headings, a monospace face (IBM Plex Mono) for tickers/numbers/section
-marks, and IBM Plex Sans for body copy, laid out as a persistent left
-sidebar table of contents against a single active content panel. The
-existing chart palette and marks in `app/dashboard/viz.py` (validated per
-the `dataviz` skill, decision 0004) are left untouched -- this module only
-adds page chrome around them, reusing `--series-2` (the "current portfolio"
-chart accent) as the site's one signature accent color so the chart layer
-and the page chrome read as one system rather than two.
+Design system: a "quant terminal / instrument panel" reading -- Space
+Grotesk (a geometric, slightly technical display face) for headings,
+JetBrains Mono for tickers/numbers/section marks/data (used more
+aggressively than Phase 7's mono did -- stat tile values, legends, table
+cells), and Inter for body copy, laid out as a persistent left sidebar nav
+against a single active content panel with a faint instrument-panel grid
+texture on hero/feature surfaces. The color tokens live in
+`app/dashboard/viz.py`'s `CHART_STYLE` (shared with the chart layer, not
+duplicated here) -- graphite-navy dark mode, cool gray-blue light mode, and
+one amber "signal" accent (`--series-2`, the same "current portfolio" chart
+color Phase 7 first reused as the site accent) so chart marks and page
+chrome read as one system rather than two.
 
 Eight sections, matching `docs/project-standards.md`'s required list:
 Overview, Inputs, Results, Learning, Glossary, Tools & Technologies,
@@ -44,72 +48,161 @@ NAV_ITEMS: tuple[tuple[str, str], ...] = (
 FONT_LINKS = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 """
+
+# Inline SVG data-URI favicon (amber "FL" bracket mark on graphite) -- no extra static
+# asset needed, matches the masthead mark's shape/color exactly.
+FAVICON_LINK = (
+    '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,'
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E"
+    "%3Crect width='64' height='64' rx='12' fill='%230a0d13'/%3E"
+    "%3Crect x='6' y='6' width='52' height='52' rx='8' fill='none' stroke='%23f0a63e' stroke-width='3'/%3E"
+    "%3Ctext x='32' y='41' font-family='monospace' font-size='24' font-weight='700' fill='%23f0a63e' "
+    "text-anchor='middle'%3EFL%3C/text%3E%3C/svg%3E\">"
+)
+
+DEFAULT_META_DESCRIPTION = (
+    "Enter a portfolio and get CAPM beta, Fama-French factor loadings, and Markowitz "
+    "efficient-frontier positioning, computed live from real market data with full "
+    "statistical diagnostics -- not a black-box score."
+)
 
 SHELL_STYLE = """
 .viz-root {
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
-  --font-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --signal: var(--series-2);
   --signal-cool: var(--series-1);
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
   font-family: var(--font-body);
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
 .app-shell { display: flex; align-items: flex-start; min-height: 100vh; }
 
-/* ---- Sidebar / masthead / nav (table of contents) ---- */
-.app-sidebar { flex: 0 0 264px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
-  padding: 26px 20px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-.masthead { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
-.masthead-mark { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
-  border: 1.5px solid var(--text-primary); border-radius: 5px; width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center; flex: none; }
-.masthead-title { font-family: var(--font-display); font-size: 19px; font-weight: 600; line-height: 1.15; }
-.masthead-tag { font-family: var(--font-display); font-style: italic; font-size: 12px; color: var(--text-secondary); }
+/* Faint instrument-panel grid texture, used sparingly behind hero/feature surfaces --
+   references the fact that everything this app renders is a point plotted on a chart. */
+.grid-texture {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--baseline) 32%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--baseline) 32%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
 
-.app-nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: auto; }
-.nav-item { display: flex; align-items: baseline; gap: 10px; text-align: left; background: none; border: none;
-  padding: 8px 10px; border-radius: 7px; cursor: pointer; color: var(--text-secondary); font: inherit;
-  font-family: var(--font-body); font-size: 13.5px; }
+/* ---- Sidebar / masthead / nav ---- */
+.app-sidebar { flex: 0 0 264px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  padding: 24px 18px 18px; border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  background: var(--page-plane); }
+.masthead { display: flex; align-items: center; gap: 11px; margin-bottom: 24px; }
+.masthead-mark { font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--signal); border: 1.5px solid var(--signal); border-radius: var(--radius-sm); width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center; flex: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 12%, transparent); }
+.masthead-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; line-height: 1.15;
+  letter-spacing: -0.01em; }
+.masthead-tag { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px;
+  color: var(--text-muted); }
+
+.app-nav { display: flex; flex-direction: column; gap: 1px; margin-bottom: auto; }
+.nav-item { display: flex; align-items: center; gap: 10px; text-align: left; background: none;
+  border: none; border-left: 2px solid transparent; padding: 8px 10px 8px 9px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  cursor: pointer; color: var(--text-secondary); font: inherit; font-family: var(--font-body); font-size: 13px; }
 .nav-item:hover { background: var(--surface-1); color: var(--text-primary); }
-.nav-item .nav-mark { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); flex: none; width: 26px; }
+.nav-item .nav-mark { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); flex: none;
+  width: 24px; }
 .nav-item .nav-pending { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.04em;
   color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; }
-.nav-item.is-active { background: var(--surface-1); color: var(--text-primary); font-weight: 600; }
+.nav-item.is-active { background: var(--surface-1); color: var(--text-primary); font-weight: 600;
+  border-left-color: var(--signal); }
 .nav-item.is-active .nav-mark { color: var(--signal); }
-.nav-item:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.nav-item:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
 
-.sidebar-foot { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
-.sidebar-disclaimer { font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+.sidebar-foot { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); }
+.theme-btn { font-family: var(--font-mono); font-size: 11px; background: var(--surface-1); color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; }
+.theme-btn:hover { color: var(--text-primary); border-color: var(--baseline); }
+.sidebar-disclaimer { font-size: 10.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.55; }
 
 /* ---- Main content ---- */
 .app-main { flex: 1 1 auto; min-width: 0; padding: 34px 28px 80px; }
 .app-main-inner { max-width: 760px; margin: 0 auto; }
-.tab-panel h1 { font-family: var(--font-display); font-size: 27px; font-weight: 600; margin: 0 0 4px; }
-.tab-panel h2 { font-family: var(--font-display); }
-.section-eyebrow { font-family: var(--font-mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-muted); margin: 0 0 8px; }
+.tab-panel h1 { font-family: var(--font-display); font-size: 27px; font-weight: 700; letter-spacing: -0.01em;
+  margin: 0 0 4px; }
+.tab-panel h2 { font-family: var(--font-display); font-weight: 600; }
+.section-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--signal); margin: 0 0 10px; }
+.section-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
 .section-lede { font-size: 14.5px; color: var(--text-secondary); max-width: 62ch; line-height: 1.6; margin: 0 0 24px; }
 
 /* ---- Overview hero ---- */
-.hero-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
-  padding: 30px 30px 26px; margin-bottom: 22px; }
+.hero-card { position: relative; background: var(--surface-1); border: 1px solid var(--border);
+  border-top: 2px solid var(--signal); border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  padding: 30px 30px 26px; margin-bottom: 22px; overflow: hidden; }
+.hero-card::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(color-mix(in srgb, var(--baseline) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--baseline) 28%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px; -webkit-mask-image: linear-gradient(to bottom, black, transparent 65%);
+  mask-image: linear-gradient(to bottom, black, transparent 65%); opacity: 0.5; }
+.hero-card > * { position: relative; }
 .hero-card p { font-size: 15px; line-height: 1.65; color: var(--text-secondary); max-width: 62ch; }
 .hero-card p strong { color: var(--text-primary); }
-.hero-cta { display: inline-flex; align-items: center; gap: 8px; background: var(--signal); color: white;
-  border: none; border-radius: 7px; padding: 11px 20px; font: inherit; font-weight: 600; font-size: 14px;
-  cursor: pointer; margin-top: 6px; }
-.hero-cta:hover { filter: brightness(1.06); }
+.hero-cta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.hero-cta { display: inline-flex; align-items: center; gap: 8px; background: var(--signal); color: #fff;
+  border: none; border-radius: var(--radius-sm); padding: 11px 20px; font: inherit; font-weight: 600; font-size: 14px;
+  cursor: pointer; }
+.hero-cta:hover { filter: brightness(1.08); }
+.hero-cta-secondary { display: inline-flex; align-items: center; gap: 8px; background: var(--page-plane);
+  color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 19px;
+  font: inherit; font-family: var(--font-mono); font-weight: 500; font-size: 13px; cursor: pointer; text-decoration: none; }
+.hero-cta-secondary:hover { border-color: var(--signal); color: var(--signal); }
 .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
-.method-card { border: 1px solid var(--border); border-radius: 9px; padding: 14px 16px; background: var(--page-plane); }
-.method-card .method-mark { font-family: var(--font-mono); font-size: 11px; color: var(--signal); }
-.method-card h3 { font-family: var(--font-display); font-size: 15px; margin: 6px 0 4px; }
+.method-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px;
+  background: var(--page-plane); }
+.method-card .method-mark { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--signal); }
+.method-card h3 { font-family: var(--font-display); font-weight: 600; font-size: 15px; margin: 7px 0 4px; }
 .method-card p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
 .disclaimer-strip { font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 22px;
   padding-top: 14px; }
+
+/* ---- Sample quick-start (rule 8) ---- */
+.quickstart-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: color-mix(in srgb, var(--signal) 8%, var(--surface-1)); border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--border));
+  border-radius: var(--radius-md); padding: 14px 18px; margin: 0 0 22px; }
+.quickstart-banner .qs-copy { font-size: 13px; color: var(--text-secondary); max-width: 46ch; }
+.quickstart-banner .qs-copy strong { color: var(--text-primary); font-family: var(--font-mono); }
+.quickstart-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--signal); color: #fff;
+  border: none; border-radius: var(--radius-sm); padding: 10px 18px; font: inherit; font-weight: 600; font-size: 13.5px;
+  cursor: pointer; text-decoration: none; flex: none; white-space: nowrap; }
+.quickstart-btn:hover { filter: brightness(1.08); }
+
+/* ---- Share / export bar (rule 8) ---- */
+.share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 16px; margin: 0 0 18px; }
+.share-bar-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); flex: none; }
+.share-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--page-plane);
+  color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 13px;
+  font: inherit; font-family: var(--font-mono); font-size: 12.5px; cursor: pointer; text-decoration: none; }
+.share-btn:hover { border-color: var(--signal); color: var(--signal); }
+.share-link-row { display: none; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+.share-link-row.is-visible { display: flex; }
+.share-link-input { flex: 1 1 auto; font-family: var(--font-mono); font-size: 12px; padding: 7px 10px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--page-plane); color: var(--text-secondary); }
+.share-copied-note { font-size: 11.5px; color: var(--status-good); font-family: var(--font-mono); display: none; }
+.share-copied-note.is-visible { display: inline; }
+
+/* ---- Curated-source note (rule 7) ---- */
+.source-note { display: flex; gap: 10px; align-items: flex-start; background: var(--page-plane);
+  border: 1px dashed var(--baseline); border-radius: var(--radius-sm); padding: 10px 13px; margin: 10px 0 18px;
+  font-size: 12px; color: var(--text-secondary); line-height: 1.55; }
+.source-note .sn-mark { font-family: var(--font-mono); font-size: 10.5px; color: var(--signal); flex: none;
+  border: 1px solid var(--signal); border-radius: 4px; padding: 1px 6px; }
+.source-note strong { color: var(--text-primary); }
 
 /* ---- Placeholder sections (Phase 8/9) ---- */
 .placeholder-card { border: 1px dashed var(--baseline); border-radius: 12px; padding: 28px 30px; background: var(--surface-1); }
@@ -213,12 +306,16 @@ body { margin: 0; }
 .rw-source-note { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.6; }
 
 /* ---- Form (Inputs section) ---- */
-.form-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 26px; }
+.form-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card); padding: 26px; }
 .field-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .field { flex: 1 1 160px; display: flex; flex-direction: column; gap: 4px; }
-.field label { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
-.field input, .field select { font: inherit; font-family: var(--font-body); padding: 8px 10px; border-radius: 6px;
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+  font-family: var(--font-mono); }
+.field input, .field select { font: inherit; font-family: var(--font-body); padding: 9px 11px; border-radius: var(--radius-sm);
   border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary); }
+.field input:focus, .field select:focus, .ticker-search:focus {
+  outline: none; border-color: var(--signal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 16%, transparent); }
 .holdings-label { font-family: var(--font-mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--text-secondary); margin: 20px 0 8px; }
 .alloc-explainer { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 12px; max-width: 62ch; }
@@ -256,10 +353,11 @@ body { margin: 0; }
 .alloc-total[data-state="over"] { border-color: color-mix(in srgb, var(--diverging-neg) 45%, var(--border));
   background: color-mix(in srgb, var(--diverging-neg) 10%, var(--surface-1)); }
 .alloc-total[data-state="over"] .alloc-total-value { color: var(--diverging-neg); }
-.submit-btn { background: var(--signal); color: white; border: none; border-radius: 7px; padding: 12px 24px;
-  font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; font: inherit; }
+.submit-btn { background: var(--signal); color: white; border: none; border-radius: var(--radius-sm); padding: 12px 24px;
+  font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; font: inherit;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 14%, transparent); }
 .submit-btn:hover { filter: brightness(1.06); }
-.submit-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+.submit-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; box-shadow: none; }
 .error-banner { background: color-mix(in srgb, var(--diverging-neg) 12%, var(--surface-1));
   border: 1px solid color-mix(in srgb, var(--diverging-neg) 40%, var(--border)); border-radius: 8px;
   padding: 12px 14px; font-size: 13px; color: var(--text-primary); margin-bottom: 18px; }
@@ -280,30 +378,56 @@ body { margin: 0; }
 .ticker-empty-note { padding: 7px 9px; font-size: 12px; color: var(--text-muted); }
 
 /* ---- Results freshness banner + section numbering (results panel) ---- */
-.freshness-banner { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-  padding: 14px 16px; font-size: 12.5px; color: var(--text-secondary); margin: 18px 0 26px; line-height: 1.6; }
+.freshness-banner { background: var(--surface-1); border: 1px solid var(--border); border-left: 2px solid var(--signal);
+  border-radius: var(--radius-md); padding: 14px 16px; font-size: 12.5px; color: var(--text-secondary);
+  margin: 18px 0 26px; line-height: 1.6; }
 .freshness-banner strong { color: var(--text-primary); font-family: var(--font-mono); font-weight: 600; font-size: 12px; }
 .freshness-banner .disclaimer { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
-.section-title { font-family: var(--font-mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--text-muted); margin: 30px 0 12px; }
+.section-title { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .section-title:first-of-type { margin-top: 8px; }
 
 /* ---- Results empty state ---- */
-.empty-results { border: 1px dashed var(--baseline); border-radius: 12px; padding: 32px 30px; text-align: left;
-  background: var(--surface-1); }
-.empty-results h2 { font-size: 19px; margin: 0 0 8px; }
+.empty-results { border: 1px dashed var(--baseline); border-radius: var(--radius-lg); padding: 32px 30px;
+  text-align: left; background: var(--surface-1); }
+.empty-results h2 { font-size: 19px; margin: 0 0 8px; font-family: var(--font-display); }
 .empty-results p { font-size: 13.5px; color: var(--text-secondary); max-width: 56ch; line-height: 1.6; }
 
 @media (max-width: 860px) {
-  .app-shell { flex-direction: column; }
+  /* `align-items: flex-start` (set for the desktop row layout, cross-axis = height) needs to
+     become `stretch` once flex-direction flips to column (cross-axis = width) -- otherwise
+     `.app-main` sizes to its widest descendant's content (e.g. a chart's 480px min-width SVG)
+     instead of the viewport, and the whole page gains a horizontal scrollbar. */
+  .app-shell { flex-direction: column; align-items: stretch; }
   .app-sidebar { position: sticky; top: 0; z-index: 30; height: auto; width: 100%; flex: none;
     border-right: none; border-bottom: 1px solid var(--border); padding: 14px 16px; background: var(--page-plane); }
   .masthead { margin-bottom: 12px; }
   .app-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; margin-bottom: 0; }
-  .nav-item { flex: none; white-space: nowrap; padding: 7px 10px; }
+  .nav-item { flex: none; white-space: nowrap; padding: 7px 10px; border-left: none; border-bottom: 2px solid transparent; }
+  .nav-item.is-active { border-left: none; border-bottom-color: var(--signal); }
   .sidebar-foot { display: none; }
   .app-main { padding: 22px 16px 60px; }
   .method-grid { grid-template-columns: 1fr; }
+  .quickstart-banner { flex-direction: column; align-items: stretch; }
+  .quickstart-btn { justify-content: center; }
+  .share-bar { flex-direction: column; align-items: stretch; }
+}
+
+/* ---- Print / "Export as PDF" (browser print-to-PDF, see decision 0008) ---- */
+@media print {
+  :root { color-scheme: light; }
+  .viz-root {
+    --surface-1: #ffffff !important; --page-plane: #ffffff !important; --text-primary: #0d1117 !important;
+    --text-secondary: #333a4a !important; --border: #d8dde6 !important; background: #fff !important;
+  }
+  .app-sidebar, .hero-cta-row, .quickstart-banner, .share-bar, .theme-btn, .add-row-btn, .helper-btn,
+  .row-remove, .submit-btn, .learn-xref-row, .nav-item { display: none !important; }
+  .app-shell { display: block; }
+  .app-main { padding: 0; }
+  .app-main-inner { max-width: none; }
+  .hero-card::before { display: none; }
+  .tab-panel[hidden] { display: none !important; }
+  .viz-card, .ref-card, .learn-card, .glossary-entry, .rw-card { break-inside: avoid; box-shadow: none; }
 }
 """
 
@@ -525,6 +649,25 @@ def _shell_script() -> str:
 
     recalcAlloc();
   }
+
+  // ---- Shareable-link "copy" control (Phase 9c) ----
+  document.querySelectorAll('[data-share-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var wrap = btn.closest('.share-bar');
+      if (!wrap) return;
+      var input = wrap.querySelector('.share-link-input');
+      var row = wrap.querySelector('.share-link-row');
+      var note = wrap.querySelector('.share-copied-note');
+      row.classList.add('is-visible');
+      input.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value).then(function () {
+          note.classList.add('is-visible');
+          window.setTimeout(function () { note.classList.remove('is-visible'); }, 2000);
+        });
+      }
+    });
+  });
 })();
 """
 
@@ -562,7 +705,24 @@ def render_combobox(
     )
 
 
-def render_app_shell(*, active_tab: str, panels: dict[str, str], page_title: str, ticker_data_script: str) -> str:
+def render_app_shell(
+    *,
+    active_tab: str,
+    panels: dict[str, str],
+    page_title: str,
+    ticker_data_script: str,
+    request_base_url: str = "",
+    meta_description: str = DEFAULT_META_DESCRIPTION,
+    canonical_path: str = "/",
+) -> str:
+    """Assembles the full page shell, including Open Graph/Twitter social-preview meta
+    (`docs/project-standards.md` rule 8) -- `request_base_url` (e.g.
+    `http://127.0.0.1:8000`, or the deployed origin once Phase 11 ships) is threaded in
+    from the route handler so `og:image`/`og:url` are always absolute, which link-unfurling
+    crawlers (LinkedIn, Slack) require; a relative URL silently fails to preview. The image
+    itself (`app/static/og-image.png`) is a static asset generated once via
+    `scripts/generate_og_image.py` -- see decision 0008.
+    """
     from app.dashboard import viz  # local import to avoid a cycle at module load
 
     nav_html = []
@@ -573,7 +733,7 @@ def render_app_shell(*, active_tab: str, panels: dict[str, str], page_title: str
         idx = NAV_ITEMS.index((tab_id, label)) + 1
         nav_html.append(
             f'<button type="button" class="nav-item{active_cls}" data-tab-target="{esc(tab_id)}" '
-            f'aria-current="{aria}"><span class="nav-mark">§{idx:02d}</span>'
+            f'aria-current="{aria}"><span class="nav-mark">[{idx:02d}]</span>'
             f'<span class="nav-label">{esc(label)}</span>{pending}</button>'
         )
 
@@ -586,12 +746,35 @@ def render_app_shell(*, active_tab: str, panels: dict[str, str], page_title: str
             f'<div class="app-main-inner">{content}</div></section>'
         )
 
+    base = request_base_url.rstrip("/")
+    image_url = f"{base}/static/og-image.png" if base else "/static/og-image.png"
+    page_url = f"{base}{canonical_path}" if base else canonical_path
+    meta_html = f"""
+<meta name="description" content="{esc(meta_description)}">
+<link rel="canonical" href="{esc(page_url)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Factor Lens">
+<meta property="og:title" content="{esc(page_title)}">
+<meta property="og:description" content="{esc(meta_description)}">
+<meta property="og:url" content="{esc(page_url)}">
+<meta property="og:image" content="{esc(image_url)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Factor Lens — live CAPM, Fama-French, and Markowitz portfolio attribution">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(page_title)}">
+<meta name="twitter:description" content="{esc(meta_description)}">
+<meta name="twitter:image" content="{esc(image_url)}">
+"""
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(page_title)}</title>
+{meta_html}
+{FAVICON_LINK}
 {FONT_LINKS}
 <style>{viz.CHART_STYLE}{SHELL_STYLE}</style>
 </head>
@@ -602,7 +785,7 @@ def render_app_shell(*, active_tab: str, panels: dict[str, str], page_title: str
       <div class="masthead-mark">FL</div>
       <div>
         <div class="masthead-title">Factor Lens</div>
-        <div class="masthead-tag">Portfolio Attribution Memo</div>
+        <div class="masthead-tag">Factor attribution console</div>
       </div>
     </div>
     <nav class="app-nav" aria-label="Report sections">{''.join(nav_html)}</nav>
@@ -631,7 +814,7 @@ _PENDING_TABS: set[str] = set()
 
 def render_overview_section() -> str:
     return """
-<div class="section-eyebrow">§01 · Overview</div>
+<div class="section-eyebrow">[01] Overview</div>
 <h1>Factor Lens</h1>
 <div class="hero-card">
   <p><strong>Factor Lens explains why a portfolio behaves the way it does.</strong> Enter your holdings and
@@ -641,7 +824,10 @@ def render_overview_section() -> str:
   t-stats, p-values) shown alongside every estimate rather than a bare number.</p>
   <p>This is decision-support analytics for retail investors and small RIAs who want to understand their
   exposures, not a black-box score, a trading signal, or personalized investment advice.</p>
-  <button type="button" class="hero-cta" data-tab-target="inputs">Enter your holdings →</button>
+  <div class="hero-cta-row">
+    <button type="button" class="hero-cta" data-tab-target="inputs">Enter your holdings →</button>
+    <a class="hero-cta-secondary" href="/dashboard/sample">▸ Run a live example</a>
+  </div>
   <div class="method-grid">
     <div class="method-card">
       <div class="method-mark">CAPM</div>
@@ -715,7 +901,7 @@ def render_tools_section() -> str:
         ]
     )
     return f"""
-<div class="section-eyebrow">§06 · Tools &amp; Technologies</div>
+<div class="section-eyebrow">[06] Tools &amp; Technologies</div>
 <h1>What this was actually built with</h1>
 <p class="section-lede">Named and specific, not "some data tools" &mdash; this section doubles as a record
 of the real stack behind the analysis.</p>
@@ -880,7 +1066,7 @@ def render_references_section() -> str:
     )
 
     return f"""
-<div class="section-eyebrow">§07 · References &amp; Formulas</div>
+<div class="section-eyebrow">[07] References &amp; Formulas</div>
 <h1>The exact math this app computes</h1>
 <p class="section-lede">What's actually implemented in <code>app/models/</code> and
 <code>app/dashboard/attribution.py</code> &mdash; not a generic textbook summary. Each card names the module
@@ -1070,7 +1256,7 @@ def render_learning_section() -> str:
     )
 
     return f"""
-<div class="section-eyebrow">§04 · Learning</div>
+<div class="section-eyebrow">[04] Learning</div>
 <h1>What your numbers actually mean</h1>
 <p class="section-lede">This is the idea's core differentiator: not just computing CAPM beta, Fama-French
 loadings, and a frontier position, but explaining what each one means for your specific portfolio, in both a
@@ -1260,7 +1446,7 @@ def render_glossary_section() -> str:
     ]
 
     return f"""
-<div class="section-eyebrow">§05 · Glossary</div>
+<div class="section-eyebrow">[05] Glossary</div>
 <h1>Terms used in this project</h1>
 <p class="section-lede">Every term this app's Results, Learning, and References &amp; Formulas sections use,
 defined in plain language and technically, with where it shows up. This project glossary also feeds the
@@ -1362,7 +1548,7 @@ def render_real_world_section() -> str:
     )
 
     return f"""
-<div class="section-eyebrow">§08 · Real World / Corporate Applications</div>
+<div class="section-eyebrow">[08] Real World / Corporate Applications</div>
 <h1>How this kind of work is actually used</h1>
 <p class="section-lede">Where factor attribution and portfolio optimization like this shows up in real
 industry &mdash; and where this project sits in that landscape. Grounded in this project's own source research
@@ -1380,7 +1566,7 @@ thin, and its "Trends" section for the wealthtech-consolidation and advisor-tech
 def render_placeholder_section(*, tab_id: str, title: str, phase_label: str, owner: str, body: str) -> str:
     idx = [i for i, (t, _l) in enumerate(NAV_ITEMS, start=1) if t == tab_id][0]
     return f"""
-<div class="section-eyebrow">§{idx:02d} · {esc(title)}</div>
+<div class="section-eyebrow">[{idx:02d}] {esc(title)}</div>
 <div class="placeholder-card">
   <span class="placeholder-stamp">Coming in {esc(phase_label)}</span>
   <h2>{esc(title)}</h2>

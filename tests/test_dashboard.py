@@ -151,3 +151,97 @@ def test_dashboard_missing_holdings_reprompts_form():
     )
     assert resp.status_code == 400
     assert "Enter at least one holding" in resp.text
+
+
+def test_dashboard_form_surfaces_ticker_source_note():
+    """Phase 9c / project-standards rule 7: the curated ticker universe's source and
+    known limitation must be visible near the combobox, not just in a decision doc."""
+    resp = client.get("/")
+    body = resp.text
+    assert "curated S&amp;P 500 constituent snapshot" in body
+    assert "drift from the current S&amp;P 500 roster" in body
+
+
+def test_dashboard_form_has_sample_quickstart_links():
+    """Phase 9c / project-standards rule 8: a one-click sample-portfolio quick-start
+    must be reachable from the Overview and Inputs tabs with no typed input required."""
+    resp = client.get("/")
+    body = resp.text
+    assert body.count('href="/dashboard/sample"') >= 2
+
+
+def test_dashboard_sample_quickstart_runs_end_to_end():
+    """The one-click sample route must run the full live pipeline with no query params."""
+    resp = client.get("/dashboard/sample")
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "AAPL" in body and "MSFT" in body and "GOOGL" in body and "AMZN" in body
+    assert "<svg" in body
+    assert "Data as of" in body
+
+
+def test_dashboard_results_page_has_share_and_export_controls():
+    payload = {
+        "symbol": ["AAPL", "MSFT", "GOOGL"],
+        "weight": ["50", "30", "20"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+
+    assert 'data-share-copy' in body
+    assert "Export as PDF" in body
+    assert "/dashboard/view?" in body
+    assert "symbol=AAPL" in body and "symbol=MSFT" in body and "symbol=GOOGL" in body
+
+
+def test_dashboard_view_shareable_link_reproduces_result():
+    """Phase 9c / project-standards rule 8: a shareable link (GET, no form submission)
+    must replay the exact holdings/benchmark/date-range/model through the same live
+    pipeline as the POST form."""
+    params = {
+        "symbol": ["AAPL", "MSFT"],
+        "weight": ["60", "40"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.get("/dashboard/view", params=params)
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "AAPL" in body and "MSFT" in body
+    assert "<svg" in body
+    assert 'value="60"' in body and 'value="40"' in body
+
+
+def test_dashboard_view_rejects_invalid_ticker():
+    resp = client.get(
+        "/dashboard/view",
+        params={
+            "symbol": ["ZZZZ"],
+            "weight": ["100"],
+            "benchmark": "^GSPC",
+            "start_date": START.isoformat(),
+            "end_date": END.isoformat(),
+        },
+    )
+    assert resp.status_code == 400
+    assert "not in the curated ticker universe" in resp.text
+
+
+def test_dashboard_page_has_og_and_social_preview_meta():
+    resp = client.get("/")
+    body = resp.text
+    assert 'property="og:title"' in body
+    assert 'property="og:image"' in body
+    assert "og-image.png" in body
+    assert 'property="og:description"' in body
+    assert 'name="twitter:card" content="summary_large_image"' in body
+    assert '<link rel="canonical"' in body

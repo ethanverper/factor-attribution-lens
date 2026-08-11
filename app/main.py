@@ -9,7 +9,10 @@ attribution/visualization layer described in
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from app.dashboard.routes import router as dashboard_router
 from app.data.equity import EquityDataError
@@ -22,6 +25,9 @@ app = FastAPI(
     description="Live equity, benchmark, Fama-French factor data, and an attribution dashboard for a given portfolio.",
     version="0.1.0",
 )
+
+# Serves the Phase 9c social-preview image (`static/og-image.png`) -- see decision 0008.
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 app.include_router(dashboard_router)
 

@@ -31,97 +31,112 @@ from dataclasses import dataclass
 CHART_STYLE = """
 .viz-root {
   color-scheme: light;
-  --surface-1:      #fcfcfb;
-  --page-plane:     #f9f9f7;
-  --text-primary:   #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted:     #898781;
-  --gridline:       #e1e0d9;
-  --baseline:       #c3c2b7;
-  --border:         rgba(11,11,11,0.10);
-  --series-1:       #2a78d6;   /* blue: frontier line, factor-explained, positive */
-  --series-2:       #eb6834;   /* orange: current-portfolio emphasis */
-  --diverging-neg:  #e34948;   /* red: negative loadings/contributions */
-  --status-warning: #fab219;
-  --status-good:    #0ca30c;
-  --tooltip-bg:     #0b0b0b;
+  --surface-1:      #ffffff;
+  --surface-2:      #e7ebf2;
+  --page-plane:     #eef1f6;
+  --text-primary:   #0d1117;
+  --text-secondary: #4b5468;
+  --text-muted:     #838da0;
+  --gridline:       #e1e5ee;
+  --baseline:       #c7cee0;
+  --border:         rgba(13,17,23,0.10);
+  --series-1:       #2461ea;   /* blue: frontier line, factor-explained, positive */
+  --series-2:       #a64d09;   /* amber/bronze: current-portfolio emphasis, site signal */
+  --diverging-neg:  #dc2626;   /* red: negative loadings/contributions */
+  --status-warning: #b45309;
+  --status-good:    #15803d;
+  --tooltip-bg:     #0d1117;
   --tooltip-fg:     #ffffff;
+  --shadow-card:    0 1px 2px rgba(13,17,23,0.05), 0 1px 1px rgba(13,17,23,0.03);
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) .viz-root {
     color-scheme: dark;
-    --surface-1:      #1a1a19;
-    --page-plane:     #0d0d0d;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --gridline:       #2c2c2a;
-    --baseline:       #383835;
-    --border:         rgba(255,255,255,0.10);
-    --series-1:       #3987e5;
-    --series-2:       #d95926;
-    --diverging-neg:  #e66767;
-    --status-warning: #fab219;
-    --status-good:    #0ca30c;
-    --tooltip-bg:     #ffffff;
-    --tooltip-fg:     #0b0b0b;
+    --surface-1:      #12161f;
+    --surface-2:      #171c27;
+    --page-plane:     #0a0d13;
+    --text-primary:   #eef1f6;
+    --text-secondary: #9aa3b5;
+    --text-muted:     #5f6779;
+    --gridline:       #1b202b;
+    --baseline:       #2a3040;
+    --border:         rgba(255,255,255,0.08);
+    --series-1:       #4c93f0;
+    --series-2:       #f0a63e;
+    --diverging-neg:  #ef6b6b;
+    --status-warning: #e6b23c;
+    --status-good:    #22c55e;
+    --tooltip-bg:     #eef1f6;
+    --tooltip-fg:     #0a0d13;
+    --shadow-card:    0 1px 0 rgba(255,255,255,0.02), 0 4px 16px rgba(0,0,0,0.28);
   }
 }
 :root[data-theme="dark"] .viz-root {
   color-scheme: dark;
-  --surface-1:      #1a1a19;
-  --page-plane:     #0d0d0d;
-  --text-primary:   #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted:     #898781;
-  --gridline:       #2c2c2a;
-  --baseline:       #383835;
-  --border:         rgba(255,255,255,0.10);
-  --series-1:       #3987e5;
-  --series-2:       #d95926;
-  --diverging-neg:  #e66767;
-  --status-warning: #fab219;
-  --status-good:    #0ca30c;
-  --tooltip-bg:     #ffffff;
-  --tooltip-fg:     #0b0b0b;
+  --surface-1:      #12161f;
+  --surface-2:      #171c27;
+  --page-plane:     #0a0d13;
+  --text-primary:   #eef1f6;
+  --text-secondary: #9aa3b5;
+  --text-muted:     #5f6779;
+  --gridline:       #1b202b;
+  --baseline:       #2a3040;
+  --border:         rgba(255,255,255,0.08);
+  --series-1:       #4c93f0;
+  --series-2:       #f0a63e;
+  --diverging-neg:  #ef6b6b;
+  --status-warning: #e6b23c;
+  --status-good:    #22c55e;
+  --tooltip-bg:     #eef1f6;
+  --tooltip-fg:     #0a0d13;
+  --shadow-card:    0 1px 0 rgba(255,255,255,0.02), 0 4px 16px rgba(0,0,0,0.28);
 }
 
 .viz-root { background: var(--page-plane); color: var(--text-primary);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 .viz-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
-  padding: 20px 22px; margin-bottom: 20px; }
+  box-shadow: var(--shadow-card); padding: 20px 22px; margin-bottom: 20px; }
 .viz-card h2 { font-size: 17px; margin: 0 0 2px; font-weight: 600; }
 .viz-card .viz-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
 .viz-chart-wrap { overflow-x: auto; }
 .viz-chart-wrap svg { width: 100%; height: auto; display: block; min-width: 480px; }
 .viz-mark { cursor: pointer; }
 .viz-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 4px 0 14px; font-size: 12.5px;
-  color: var(--text-secondary); }
+  font-family: var(--font-mono, ui-monospace); color: var(--text-secondary); }
 .viz-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .viz-legend-swatch-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .viz-legend-swatch-line { width: 14px; height: 2px; display: inline-block; border-radius: 1px; }
 .viz-legend-swatch-diamond { width: 9px; height: 9px; display: inline-block; transform: rotate(45deg); }
 .viz-tooltip { position: fixed; pointer-events: none; background: var(--tooltip-bg); color: var(--tooltip-fg);
-  font-size: 12px; padding: 6px 9px; border-radius: 6px; z-index: 1000; opacity: 0; transition: opacity 0.08s;
-  max-width: 260px; line-height: 1.45; }
+  font-family: var(--font-mono, ui-monospace); font-size: 12px; padding: 6px 9px; border-radius: 6px; z-index: 1000;
+  opacity: 0; transition: opacity 0.08s; max-width: 260px; line-height: 1.45; }
 .viz-tooltip.is-visible { opacity: 0.97; }
 .viz-tooltip .tt-value { font-weight: 700; }
 .viz-table-twin { margin-top: 10px; }
-.viz-table-twin summary { cursor: pointer; font-size: 12.5px; color: var(--text-secondary); }
+.viz-table-twin summary { cursor: pointer; font-size: 12.5px; color: var(--text-secondary); font-family: var(--font-mono, ui-monospace); }
 .viz-table-twin table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
 .viz-table-twin th, .viz-table-twin td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--gridline); }
+.viz-table-twin th { font-family: var(--font-mono, ui-monospace); font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-muted); font-weight: 500; }
 .viz-table-twin th:first-child, .viz-table-twin td:first-child { text-align: left; }
-.viz-table-twin td { font-variant-numeric: tabular-nums; }
+.viz-table-twin td { font-variant-numeric: tabular-nums; font-family: var(--font-mono, ui-monospace); }
 .viz-note { font-size: 12.5px; color: var(--text-secondary); margin-top: 8px; }
 .viz-warn-banner { display: flex; align-items: flex-start; gap: 8px; background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-1));
   border: 1px solid color-mix(in srgb, var(--status-warning) 45%, var(--border)); border-radius: 8px;
   padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); margin-bottom: 14px; }
-.viz-stat-row { display: flex; flex-wrap: wrap; gap: 14px; }
-.viz-stat-tile { flex: 1 1 150px; min-width: 140px; }
-.viz-stat-tile .stat-label { font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase;
-  letter-spacing: 0.03em; margin-bottom: 4px; }
-.viz-stat-tile .stat-value { font-size: 26px; font-weight: 600; line-height: 1.1; }
-.viz-stat-tile .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.viz-stat-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.viz-stat-tile { flex: 1 1 150px; min-width: 140px; background: var(--page-plane); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px 11px; border-top: 2px solid var(--series-2); }
+.viz-stat-tile .stat-label { font-size: 10.5px; color: var(--text-secondary); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px; font-family: var(--font-mono, ui-monospace); }
+.viz-stat-tile .stat-value { font-size: 27px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, ui-monospace); }
+.viz-stat-tile .stat-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+
+@media print {
+  .viz-tooltip { display: none !important; }
+  .viz-mark { cursor: default; }
+}
 """
 
 CHART_SCRIPT = """
