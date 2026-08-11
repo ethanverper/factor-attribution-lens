@@ -454,6 +454,28 @@ def _render_frontier_section(ef, cp) -> str:
         viz.FrontierPointVM(volatility=p.volatility_annualized, ret=p.expected_return_annualized, sharpe=p.sharpe_ratio)
         for p in ef.frontier
     ]
+
+    # A single-asset (or fully-identical-holdings) portfolio has no continuum of
+    # feasible portfolios to solve for, so the frontier is mathematically empty or
+    # collapses to one repeated point -- correct math, but reads as a broken chart
+    # with no explanation. Detect both shapes and say so inline instead.
+    frontier_span = (
+        max(p.volatility for p in frontier_points) - min(p.volatility for p in frontier_points)
+        if len(frontier_points) >= 2
+        else 0.0
+    )
+    frontier_is_degenerate = len(frontier_points) == 0 or frontier_span < 1e-6
+    info_html = ""
+    if frontier_is_degenerate:
+        if len(ef.symbols) < 2:
+            info_html = viz.info_banner(
+                "Efficient frontier requires 2+ distinct holdings — showing your single position only."
+            )
+        else:
+            info_html = viz.info_banner(
+                "Your holdings' return/risk profiles are effectively identical, so there's no continuum of "
+                "feasible portfolios to trace a frontier from — showing your position only."
+            )
     current_vm = viz.FrontierPointVM(
         volatility=cp.volatility_annualized, ret=cp.expected_return_annualized, sharpe=cp.sharpe_ratio
     )
@@ -530,6 +552,7 @@ def _render_frontier_section(ef, cp) -> str:
   <p class="viz-subtitle">Long-only Markowitz frontier ({esc(ef.n_obs)} {esc(ef.frequency)} obs across
   {esc(len(ef.symbols))} holdings). This shows where your as-entered portfolio sits — it is not a rebalancing recommendation.</p>
   {warn_html}
+  {info_html}
   {chart_legend}
   {chart}
   {stats}

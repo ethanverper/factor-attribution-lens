@@ -96,6 +96,21 @@ def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _plain_validation_message(exc: ValidationError) -> str:
+    """Turn a pydantic `ValidationError` into a single plain-language sentence instead
+    of its raw multi-line dump (type, input value, docs URL, etc.) -- matching the
+    plain-language convention every other error path in this module already follows."""
+    errors = exc.errors()
+    if errors:
+        msg = errors[0].get("msg", "")
+        prefix = "Value error, "
+        if msg.startswith(prefix):
+            msg = msg[len(prefix):]
+        if msg:
+            return f"Your submission couldn't be processed: {msg}."
+    return "Your submission couldn't be processed. Check your inputs and try again."
+
+
 @router.get("/", response_class=HTMLResponse)
 def dashboard_form(request: Request) -> str:
     return render_form_page(start_date=_DEFAULT_START, end_date=_DEFAULT_END, request_base_url=_base_url(request))
@@ -165,9 +180,21 @@ def _run_dashboard(
             400,
         )
 
+    holding_symbols = [h.symbol for h in holdings]
+    if len(holding_symbols) != len(set(holding_symbols)):
+        dupes = sorted({s for s in holding_symbols if holding_symbols.count(s) > 1})
+        return re_render_form(
+            f"You entered {', '.join(dupes)} more than once. Each holding must be a distinct ticker.", 400
+        )
+
     if not tickers.is_valid_benchmark(benchmark):
         return re_render_form(
             f"'{benchmark}' is not in the curated benchmark list. Choose a benchmark from the search list.", 400
+        )
+
+    if start_date >= end_date:
+        return re_render_form(
+            "Start date must be before end date. Adjust the date range before submitting.", 400
         )
 
     try:
@@ -180,7 +207,10 @@ def _run_dashboard(
             frequency=frequency,
         )
     except ValidationError as exc:
-        return re_render_form(str(exc), 400)
+        # Defense-in-depth backstop for a hand-crafted POST/GET that skips the plain-
+        # language checks above entirely (duplicate symbols, bad date range are both
+        # caught earlier now) -- still never leak pydantic's raw multi-line dump.
+        return re_render_form(_plain_validation_message(exc), 400)
 
     try:
         data = build_portfolio_return_data(request_model)

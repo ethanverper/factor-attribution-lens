@@ -130,6 +130,9 @@ CHART_STYLE = """
 .viz-warn-banner { display: flex; align-items: flex-start; gap: 8px; background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-1));
   border: 1px solid color-mix(in srgb, var(--status-warning) 45%, var(--border)); border-radius: 8px;
   padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); margin-bottom: 14px; }
+.viz-info-banner { display: flex; align-items: flex-start; gap: 8px; background: color-mix(in srgb, var(--series-1) 12%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--series-1) 40%, var(--border)); border-radius: 8px;
+  padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); margin-bottom: 14px; }
 .viz-stat-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .viz-stat-tile { flex: 1 1 150px; min-width: 140px; background: var(--page-plane); border: 1px solid var(--border);
   border-radius: 8px; padding: 12px 14px 11px; border-top: 2px solid var(--series-2); }
@@ -311,6 +314,15 @@ def table_view(table_id: str, headers: list[str], rows: list[list[str]]) -> str:
 
 def warn_banner(text: str) -> str:
     return f'<div class="viz-warn-banner"><strong>⚠</strong><span>{esc(text)}</span></div>'
+
+
+def info_banner(text: str) -> str:
+    return f'<div class="viz-info-banner"><strong>ⓘ</strong><span>{esc(text)}</span></div>'
+
+
+def _bbox_overlap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    """Axis-aligned bounding-box overlap test; boxes are (x0, y0, x1, y1)."""
+    return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
 
 
 # ---------------------------------------------------------------------------
@@ -549,56 +561,151 @@ def frontier_chart(
             "</g>"
         )
 
-    def marker_group(point: FrontierPointVM, label: str, color: str, shape: str, r: int, tt_extra: str) -> str:
+    # GMV / max-Sharpe / current-portfolio markers and their labels.
+    #
+    # Marks are placed independently (each at its own data point), but labels need
+    # shared awareness of where *sibling* labels land -- three markers placed close
+    # together (or, for a degenerate single-asset portfolio, literally the same
+    # point by construction) previously produced three independently right-edge-
+    # avoiding labels with no idea they'd collide with each other. Two passes fix
+    # that; see docs/decisions/0011-phase10b-frontier-marker-label-collision.md:
+    #   1. Cluster markers whose *pixel* positions land within COINCIDENT_PX of
+    #      each other (visually the same point, e.g. QA's ~0.5px-apart repro or
+    #      the exact-equality degenerate case) and give the whole cluster one
+    #      combined label ("GMV = Your portfolio") instead of stacking separate,
+    #      illegible ones on top of each other.
+    #   2. For labels that remain close but distinct, resolve any residual
+    #      bounding-box overlap by nudging the lower one further down until clear.
+    COINCIDENT_PX = 6.0
+    LABEL_GAP_PX = 4.0
+
+    def marker_shape_svg(point: FrontierPointVM, color: str, shape: str, r: int) -> str:
         x, y = px(point.volatility), py(point.ret)
         if shape == "diamond":
-            mark = f'<rect x="{x - r:.2f}" y="{y - r:.2f}" width="{r * 2}" height="{r * 2}" fill="{color}" ' \
-                   f'stroke="var(--surface-1)" stroke-width="2" transform="rotate(45 {x:.2f} {y:.2f})" />'
-        else:
-            mark = f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{color}" stroke="var(--surface-1)" stroke-width="2" />'
-        # Flip the direct label to the marker's left when it would overflow the plot's right
-        # edge (e.g. a max-Sharpe/frontier point near the highest-volatility end) -- never let
-        # it clip. ~6.4px/char at this font-size/weight is a safe overestimate for measuring
-        # without a layout engine.
-        label_w = len(label) * 6.4
-        overflows_right = x + r + 6 + label_w > width - right
-        if overflows_right:
-            text_x, anchor = x - r - 6, "end"
-        else:
-            text_x, anchor = x + r + 6, "start"
+            return (
+                f'<rect x="{x - r:.2f}" y="{y - r:.2f}" width="{r * 2}" height="{r * 2}" fill="{color}" '
+                f'stroke="var(--surface-1)" stroke-width="2" transform="rotate(45 {x:.2f} {y:.2f})" />'
+            )
+        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{color}" stroke="var(--surface-1)" stroke-width="2" />'
+
+    def marker_hover_svg(point: FrontierPointVM, full_label: str, tt_extra: str) -> str:
+        x, y = px(point.volatility), py(point.ret)
         return (
-            f'<g class="viz-mark" tabindex="0" data-tt-label="{esc(label)}" '
+            f'<g class="viz-mark" tabindex="0" data-tt-label="{esc(full_label)}" '
             f'data-tt-value="{esc(fmt_pct(point.ret, 2))} return" data-tt-extra="{esc(tt_extra)}">'
-            f'<title>{esc(label)}: {esc(fmt_pct(point.ret, 2))} return, {esc(fmt_pct(point.volatility, 2))} volatility</title>'
+            f'<title>{esc(full_label)}: {esc(fmt_pct(point.ret, 2))} return, {esc(fmt_pct(point.volatility, 2))} volatility</title>'
             f'<circle cx="{x:.2f}" cy="{y:.2f}" r="18" fill="transparent" />'
-            f"{mark}"
-            f'<text x="{text_x:.2f}" y="{y + 4:.2f}" font-size="11.5" text-anchor="{anchor}" '
-            f'fill="var(--text-primary)" font-weight="600">{esc(label)}</text>'
             "</g>"
         )
 
-    gmv_svg = marker_group(
-        gmv, "Global min-variance", "var(--text-muted)", "circle", 5,
-        f"volatility {fmt_pct(gmv.volatility, 2)} · Sharpe {fmt_ratio(gmv.sharpe)}",
-    )
-    ms_svg = ""
+    marker_specs = [
+        {
+            "point": gmv, "short": "GMV", "full": "Global min-variance",
+            "color": "var(--text-muted)", "shape": "circle", "r": 5,
+            "tt_extra": f"volatility {fmt_pct(gmv.volatility, 2)} · Sharpe {fmt_ratio(gmv.sharpe)}",
+        }
+    ]
     if max_sharpe is not None:
-        ms_svg = marker_group(
-            max_sharpe, "Max Sharpe (tangency)", "var(--text-muted)", "diamond", 5,
-            f"volatility {fmt_pct(max_sharpe.volatility, 2)} · Sharpe {fmt_ratio(max_sharpe.sharpe)}",
-        )
-    # A soft amber halo behind "Your portfolio" only -- the one point on this chart the
-    # site's single signal accent should draw the eye to first, echoing the same
-    # armed/active glow already used on buttons and focus rings (decision 0008) rather than
-    # letting the current-portfolio dot sit at the same visual weight as the reference markers.
+        marker_specs.append({
+            "point": max_sharpe, "short": "Max Sharpe", "full": "Max Sharpe (tangency)",
+            "color": "var(--text-muted)", "shape": "diamond", "r": 5,
+            "tt_extra": f"volatility {fmt_pct(max_sharpe.volatility, 2)} · Sharpe {fmt_ratio(max_sharpe.sharpe)}",
+        })
+    marker_specs.append({
+        "point": current, "short": "Your portfolio", "full": "Your portfolio",
+        "color": "var(--series-2)", "shape": "circle", "r": 6,
+        "tt_extra": f"volatility {fmt_pct(current.volatility, 2)} · Sharpe {fmt_ratio(current.sharpe)}",
+    })
+    for spec in marker_specs:
+        spec["x"], spec["y"] = px(spec["point"].volatility), py(spec["point"].ret)
+
+    # A soft amber halo behind "Your portfolio"'s point -- the one location on this
+    # chart the site's single signal accent should draw the eye to first, echoing
+    # the same armed/active glow already used on buttons and focus rings (decision
+    # 0008). Drawn beneath every marker shape so it still reads correctly when
+    # "Your portfolio" is coincident with GMV/max-Sharpe.
     current_halo = (
         f'<circle cx="{px(current.volatility):.2f}" cy="{py(current.ret):.2f}" r="15" '
         f'fill="var(--series-2)" opacity="0.16" />'
     )
-    current_svg = marker_group(
-        current, "Your portfolio", "var(--series-2)", "circle", 6,
-        f"volatility {fmt_pct(current.volatility, 2)} · Sharpe {fmt_ratio(current.sharpe)}",
-    )
+    marks_svg = [marker_shape_svg(s["point"], s["color"], s["shape"], s["r"]) for s in marker_specs]
+    hovers_svg = [marker_hover_svg(s["point"], s["full"], s["tt_extra"]) for s in marker_specs]
+
+    # Union-find clustering of markers within COINCIDENT_PX of each other in
+    # screen space (only ever up to 3 markers, so an O(n^2) pairwise pass is fine).
+    n_markers = len(marker_specs)
+    parent = list(range(n_markers))
+
+    def _find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def _union(i: int, j: int) -> None:
+        ri, rj = _find(i), _find(j)
+        if ri != rj:
+            parent[ri] = rj
+
+    for i in range(n_markers):
+        for j in range(i + 1, n_markers):
+            dist = (
+                (marker_specs[i]["x"] - marker_specs[j]["x"]) ** 2
+                + (marker_specs[i]["y"] - marker_specs[j]["y"]) ** 2
+            ) ** 0.5
+            if dist <= COINCIDENT_PX:
+                _union(i, j)
+    clusters: dict[int, list[int]] = {}
+    for i in range(n_markers):
+        clusters.setdefault(_find(i), []).append(i)
+
+    label_candidates = []
+    for indices in clusters.values():
+        members = [marker_specs[i] for i in indices]
+        # Coincident members share ~the same pixel position by construction of the
+        # distance test above -- anchor the combined label on the first member's point.
+        ax, ay = members[0]["x"], members[0]["y"]
+        max_r = max(m["r"] for m in members)
+        label_text = " = ".join(m["short"] for m in members)
+        # ~6.4px/char at this font-size/weight is a safe overestimate for measuring
+        # without a layout engine -- same right-edge overflow avoidance as before,
+        # now applied once per cluster rather than once per marker.
+        label_w = len(label_text) * 6.4
+        overflows_right = ax + max_r + 6 + label_w > width - right
+        if overflows_right:
+            text_x, anchor = ax - max_r - 6, "end"
+        else:
+            text_x, anchor = ax + max_r + 6, "start"
+        x0 = text_x - label_w if anchor == "end" else text_x
+        x1 = text_x if anchor == "end" else text_x + label_w
+        label_candidates.append({
+            "text": label_text, "text_x": text_x, "anchor": anchor, "y": ay,
+            "bbox": (x0, ay - 10.0, x1, ay + 4.0),
+        })
+
+    # Resolve any residual label-vs-label overlap (clusters close but not close
+    # enough to merge) by nudging the lower one down until its bounding box clears
+    # every label already placed above it.
+    label_candidates.sort(key=lambda c: c["y"])
+    placed_labels: list[dict] = []
+    for cand in label_candidates:
+        guard = 0
+        while guard < 10:
+            blocker = next((p for p in placed_labels if _bbox_overlap(cand["bbox"], p["bbox"])), None)
+            if blocker is None:
+                break
+            shift = blocker["bbox"][3] - cand["bbox"][1] + LABEL_GAP_PX
+            cand["y"] += shift
+            x0, y0, x1, y1 = cand["bbox"]
+            cand["bbox"] = (x0, y0 + shift, x1, y1 + shift)
+            guard += 1
+        placed_labels.append(cand)
+
+    labels_svg = [
+        f'<text x="{c["text_x"]:.2f}" y="{c["y"] + 4:.2f}" font-size="11.5" text-anchor="{c["anchor"]}" '
+        f'fill="var(--text-primary)" font-weight="600">{esc(c["text"])}</text>'
+        for c in placed_labels
+    ]
 
     connector = ""
     if frontier_return_at_current_vol is not None:
@@ -628,7 +735,8 @@ def frontier_chart(
     svg = (
         f'<div class="viz-chart-wrap"><svg viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Efficient frontier chart">'
-        f"{''.join(grid)}{frontier_line}{''.join(frontier_dots)}{connector}{gmv_svg}{ms_svg}{current_halo}{current_svg}"
+        f"{''.join(grid)}{frontier_line}{''.join(frontier_dots)}{connector}"
+        f"{current_halo}{''.join(marks_svg)}{''.join(hovers_svg)}{''.join(labels_svg)}"
         f'<text x="{left + plot_w / 2:.2f}" y="{height - 6}" font-size="11.5" text-anchor="middle" '
         f'fill="var(--text-secondary)">Annualized volatility</text>'
         f'<text x="14" y="{top + plot_h / 2:.2f}" font-size="11.5" fill="var(--text-secondary)" '

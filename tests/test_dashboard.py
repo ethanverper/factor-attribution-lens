@@ -138,6 +138,83 @@ def test_return_attribution_identity_holds():
     assert abs(risk_attr.factor_explained_share + risk_attr.idiosyncratic_share - 1.0) < 1e-9
 
 
+def test_dashboard_submit_rejects_duplicate_symbols_with_plain_language():
+    """Phase 10b: duplicate-symbol submissions must not leak pydantic's raw
+    multi-line validation dump ('1 validation error for PortfolioRequest', etc.)."""
+    payload = {
+        "symbol": ["AAPL", "AAPL"],
+        "weight": ["50", "50"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 400
+    assert "entered AAPL more than once" in resp.text
+    assert "distinct ticker" in resp.text
+    assert "validation error" not in resp.text.lower()
+    assert "errors.pydantic.dev" not in resp.text
+
+
+def test_dashboard_submit_rejects_bad_date_range_with_plain_language():
+    """Phase 10b: start_date >= end_date must not leak pydantic's raw dump either."""
+    payload = {
+        "symbol": ["AAPL", "MSFT"],
+        "weight": ["50", "50"],
+        "benchmark": "^GSPC",
+        "start_date": END.isoformat(),  # start after end
+        "end_date": START.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 400
+    assert "Start date must be before end date" in resp.text
+    assert "validation error" not in resp.text.lower()
+    assert "errors.pydantic.dev" not in resp.text
+
+
+def test_dashboard_single_asset_shows_degenerate_frontier_note():
+    """Phase 10b: a single-holding (100%) portfolio has no continuum of feasible
+    portfolios, so the frontier is empty -- the page must explain this inline
+    rather than showing a silently-empty chart."""
+    payload = {
+        "symbol": ["AAPL"],
+        "weight": ["100"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "requires 2+ distinct holdings" in body
+    assert "showing your single position only" in body
+
+
+def test_dashboard_single_asset_frontier_markers_do_not_overlap():
+    """Phase 10b: for a single-asset portfolio, GMV/Max-Sharpe/current portfolio
+    are the exact same point by construction -- their labels must merge into one
+    combined label instead of stacking illegibly (see test_viz_frontier_chart.py
+    for the underlying unit coverage; this confirms it end-to-end)."""
+    payload = {
+        "symbol": ["AAPL"],
+        "weight": ["100"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 200, resp.text
+    assert "GMV = Max Sharpe = Your portfolio" in resp.text
+
+
 def test_dashboard_missing_holdings_reprompts_form():
     resp = client.post(
         "/dashboard",
