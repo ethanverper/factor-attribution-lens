@@ -6,6 +6,7 @@ data, plausibility/structure checks rather than fixed reference values.
 """
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -347,3 +348,70 @@ def test_dashboard_page_has_og_and_social_preview_meta():
     assert 'property="og:description"' in body
     assert 'name="twitter:card" content="summary_large_image"' in body
     assert '<link rel="canonical"' in body
+
+
+def test_dashboard_page_loads_gsap_self_hosted_not_from_a_cdn():
+    """Phase 10g / decision 0015: GSAP must be vendored (`app/static/vendor/`), not a CDN
+    <script> tag -- the app's own no-external-network-dependency-at-request-time convention."""
+    resp = client.get("/")
+    body = resp.text
+    assert '<script src="/static/vendor/gsap.min.js"></script>' in body
+    # No <script src="..."> tag may point at a CDN. This checks script tags specifically,
+    # not the whole page body -- the Tools & Technologies copy legitimately mentions "not a
+    # CDN" in prose, which a bare substring check would (and did) false-positive on.
+    script_srcs = re.findall(r'<script[^>]+src="([^"]*)"', body, re.IGNORECASE)
+    assert script_srcs, "expected at least one <script src=...> tag on the page"
+    assert not any("cdn" in src.lower() for src in script_srcs)
+    vendor_resp = client.get("/static/vendor/gsap.min.js")
+    assert vendor_resp.status_code == 200
+    assert "GSAP" in vendor_resp.text[:200]
+
+
+def test_dashboard_form_has_paired_number_and_range_allocation_inputs():
+    """Phase 10g / decision 0015 S5: each holding row must have both the precise number
+    input (value of record, unchanged contract) and a range slider, two-way bindable."""
+    resp = client.get("/")
+    body = resp.text
+    assert 'class="weight-number"' in body
+    assert 'data-weight-range' in body
+    assert 'type="range"' in body
+    # The number input keeps its exact original name/contract -- no backend change.
+    assert 'name="weight" class="weight-number"' in body
+
+
+def test_dashboard_results_page_stat_tiles_carry_count_up_attributes():
+    """Phase 10g / decision 0015 S4: numeric stat tiles must carry `data-count-target` so the
+    client can animate a raw number -- and the displayed text must still be the real,
+    server-computed value (progressive enhancement, no JS required to read it)."""
+    payload = {
+        "symbol": ["AAPL", "MSFT", "GOOGL"],
+        "weight": ["50", "30", "20"],
+        "benchmark": "^GSPC",
+        "start_date": START.isoformat(),
+        "end_date": END.isoformat(),
+        "factor_model": "3",
+        "frequency": "daily",
+    }
+    resp = client.post("/dashboard", data=payload)
+    assert resp.status_code == 200, resp.text
+    body = resp.text
+    assert "data-count-target=" in body
+    assert "data-count-decimals=" in body
+    assert 'class="results-section" data-reveal-section="1"' in body
+    assert 'data-reveal-section="2"' in body
+    assert 'data-reveal-section="3"' in body
+
+
+def test_dashboard_tools_section_has_five_named_categories_tied_to_project_use():
+    resp = client.get("/")
+    body = resp.text
+    for heading in [
+        "Languages",
+        "Frameworks &amp; libraries",
+        "Data &amp; quant methods",
+        "Presentation &amp; rendering",
+        "Infrastructure &amp; delivery",
+    ]:
+        assert heading in body
+    assert "GSAP" in body
+    assert "genuinely new territory" in body

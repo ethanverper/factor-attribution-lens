@@ -58,12 +58,24 @@ def _holding_row_html(symbol: str = "", weight: str = "") -> str:
         selected_label=label or "",
         placeholder="Search ticker or company…",
     )
+    # Phase 10g / decision 0015 §5: a paired number + range control, two-way bound client-side
+    # (`motion.py`'s `initWeightControls`) -- the number input stays the value of record (exact
+    # entry, e.g. "33.33", zero backend/schema change), the range is a second, faster way to set
+    # the same value. `tabindex="-1"` keeps the range out of normal tab order (the number input
+    # is the field's real stop) while still being fully draggable/clickable and keyboard-usable
+    # once focused via the number input's own affordance -- consistent with treating it as an
+    # alternate input, not a second independent field.
+    range_value = weight if weight else "0"
     return (
         '<div class="holding-row">'
         f'<div class="field">{combobox}</div>'
         '<div class="field weight-field">'
-        f'<input type="number" name="weight" placeholder="e.g. 25" step="0.01" min="0" max="100" '
+        '<div class="weight-control">'
+        f'<input type="number" name="weight" class="weight-number" placeholder="e.g. 25" step="0.01" min="0" max="100" '
         f'inputmode="decimal" aria-label="Allocation percentage" value="{esc(weight)}">'
+        f'<input type="range" class="weight-range" data-weight-range min="0" max="100" step="0.5" '
+        f'value="{esc(range_value)}" tabindex="-1" aria-label="Allocation percentage (drag)">'
+        "</div>"
         "</div>"
         '<button type="button" class="row-remove" aria-label="Remove holding" '
         "onclick=\"this.parentElement.remove(); if (window.__flRecalcAlloc) window.__flRecalcAlloc();\">×</button>"
@@ -347,22 +359,30 @@ shift slightly day to day. "Export as PDF" uses your browser's print dialog (cho
 def _render_exposure_section(capm, ff) -> str:
     tiles = viz.stat_row(
         [
-            viz.stat_tile(
+            viz.stat_tile_num(
                 f"CAPM beta vs {capm.benchmark}",
-                viz.fmt_num(capm.beta.estimate, 2),
-                f"95% CI [{viz.fmt_num(capm.beta.ci_lower_95, 2)}, {viz.fmt_num(capm.beta.ci_upper_95, 2)}] · "
-                f"t={viz.fmt_num(capm.beta.t_stat, 2)}, p={viz.fmt_pvalue(capm.beta.p_value)}",
+                capm.beta.estimate,
+                2,
+                sub=(
+                    f"95% CI [{viz.fmt_num(capm.beta.ci_lower_95, 2)}, {viz.fmt_num(capm.beta.ci_upper_95, 2)}] · "
+                    f"t={viz.fmt_num(capm.beta.t_stat, 2)}, p={viz.fmt_pvalue(capm.beta.p_value)}"
+                ),
             ),
-            viz.stat_tile(
+            viz.stat_tile_pct(
                 "CAPM alpha (annualized)",
-                viz.fmt_pct(capm.alpha_annualized, 2, signed=True),
-                f"periodic t={viz.fmt_num(capm.alpha.t_stat, 2)}, p={viz.fmt_pvalue(capm.alpha.p_value)} "
-                f"({viz.significance_note(capm.alpha.p_value)})",
+                capm.alpha_annualized,
+                2,
+                signed=True,
+                sub=(
+                    f"periodic t={viz.fmt_num(capm.alpha.t_stat, 2)}, p={viz.fmt_pvalue(capm.alpha.p_value)} "
+                    f"({viz.significance_note(capm.alpha.p_value)})"
+                ),
             ),
-            viz.stat_tile(
+            viz.stat_tile_pct(
                 "CAPM R²",
-                viz.fmt_pct(capm.r_squared, 1),
-                f"n={capm.n_obs} {capm.frequency} obs",
+                capm.r_squared,
+                1,
+                sub=f"n={capm.n_obs} {capm.frequency} obs",
             ),
         ]
     )
@@ -407,17 +427,19 @@ def _render_exposure_section(capm, ff) -> str:
 
     ff_stats = viz.stat_row(
         [
-            viz.stat_tile("Fama-French alpha (annualized)", viz.fmt_pct(ff.alpha_annualized, 2, signed=True)),
-            viz.stat_tile("Fama-French R²", viz.fmt_pct(ff.r_squared, 1), f"adj. {viz.fmt_pct(ff.adj_r_squared, 1)}"),
-            viz.stat_tile(
+            viz.stat_tile_pct("Fama-French alpha (annualized)", ff.alpha_annualized, 2, signed=True),
+            viz.stat_tile_pct("Fama-French R²", ff.r_squared, 1, sub=f"adj. {viz.fmt_pct(ff.adj_r_squared, 1)}"),
+            viz.stat_tile_num(
                 "F-statistic",
-                viz.fmt_num(ff.f_statistic, 1),
-                f"p={viz.fmt_pvalue(ff.f_p_value)}, n={ff.n_obs} {ff.frequency} obs",
+                ff.f_statistic,
+                1,
+                sub=f"p={viz.fmt_pvalue(ff.f_p_value)}, n={ff.n_obs} {ff.frequency} obs",
             ),
         ]
     )
 
     return f"""
+<div class="results-section" data-reveal-section="1">
 <div class="section-title">1. Factor exposure</div>
 <div class="viz-card">
   <h2>CAPM beta vs. {esc(capm.benchmark)}</h2>
@@ -432,6 +454,7 @@ def _render_exposure_section(capm, ff) -> str:
   {loadings_chart}
   {loadings_table}
   {ff_stats}
+</div>
 </div>
 """
 
@@ -520,10 +543,10 @@ def _render_frontier_section(ef, cp) -> str:
 
     stats = viz.stat_row(
         [
-            viz.stat_tile("Your annualized return", viz.fmt_pct(cp.expected_return_annualized, 2)),
-            viz.stat_tile("Your annualized volatility", viz.fmt_pct(cp.volatility_annualized, 2)),
-            viz.stat_tile("Your Sharpe ratio", viz.fmt_ratio(cp.sharpe_ratio)),
-            viz.stat_tile("Return gap at matched volatility", viz.fmt_pct(gap, 2, signed=True), gap_sub),
+            viz.stat_tile_pct("Your annualized return", cp.expected_return_annualized, 2),
+            viz.stat_tile_pct("Your annualized volatility", cp.volatility_annualized, 2),
+            viz.stat_tile_ratio("Your Sharpe ratio", cp.sharpe_ratio),
+            viz.stat_tile_pct("Return gap at matched volatility", gap, 2, signed=True, sub=gap_sub),
         ]
     )
 
@@ -546,6 +569,7 @@ def _render_frontier_section(ef, cp) -> str:
     )
 
     return f"""
+<div class="results-section" data-reveal-section="2">
 <div class="section-title">2. Efficient frontier</div>
 <div class="viz-card">
   <h2>Your portfolio vs. the modeled efficient frontier</h2>
@@ -557,6 +581,7 @@ def _render_frontier_section(ef, cp) -> str:
   {chart}
   {stats}
   {frontier_table}
+</div>
 </div>
 """
 
@@ -585,6 +610,7 @@ def _render_attribution_section(return_attribution: ReturnAttribution, risk_attr
     )
 
     return f"""
+<div class="results-section" data-reveal-section="3">
 <div class="section-title">3. Return &amp; risk attribution</div>
 <div class="viz-card">
   <h2>Return attribution</h2>
@@ -605,6 +631,7 @@ def _render_attribution_section(return_attribution: ReturnAttribution, risk_attr
   annualization split documented in the project's Phase 2 methodology decision — they are deliberately left
   per-period rather than re-annualized piecewise, since summing already-annualized, differently-convention'd
   pieces would not reconcile to the realized total the way the per-period figures above do exactly.</p>
+</div>
 </div>
 """
 

@@ -265,14 +265,79 @@ def significance_note(p: float) -> str:
 # ---------------------------------------------------------------------------
 
 
-def stat_tile(label: str, value: str, sub: str | None = None) -> str:
+def stat_tile(
+    label: str,
+    value: str,
+    sub: str | None = None,
+    *,
+    count_target: float | None = None,
+    count_decimals: int = 2,
+    count_suffix: str = "",
+    count_signed: bool = False,
+) -> str:
+    """A single stat readout. `value` is always the real, already-formatted string --
+    server-rendered, correct with no JS at all (progressive enhancement, decision 0015).
+
+    `count_target`/`count_decimals`/`count_suffix`/`count_signed` (Phase 10g) are an
+    *additional*, optional data-attribute payload the client-side count-up animation
+    reads to tween a raw number and reformat it on every tick -- it never parses
+    `value` back apart (fragile). Omit `count_target` (leave `None`) for a tile whose
+    value isn't a plain formatted number (e.g. already "—" for a missing figure) --
+    the tile still renders correctly, it just doesn't animate.
+    """
     sub_html = f'<div class="stat-sub">{esc(sub)}</div>' if sub else ""
+    count_attrs = ""
+    if count_target is not None:
+        count_attrs = (
+            f' data-count-target="{count_target:.6f}" data-count-decimals="{count_decimals}"'
+            f' data-count-suffix="{esc(count_suffix)}" data-count-signed="{"true" if count_signed else "false"}"'
+        )
     return (
         '<div class="viz-stat-tile">'
         f'<div class="stat-label">{esc(label)}</div>'
-        f'<div class="stat-value">{esc(value)}</div>'
+        f'<div class="stat-value"{count_attrs}>{esc(value)}</div>'
         f"{sub_html}"
         "</div>"
+    )
+
+
+def stat_tile_pct(label: str, value: float | None, decimals: int = 2, *, signed: bool = False, sub: str | None = None) -> str:
+    """`stat_tile` for a fraction rendered as a percent (the app's most common case) --
+    formats `value` with `fmt_pct` and wires the matching count-up attributes in one call."""
+    return stat_tile(
+        label,
+        fmt_pct(value, decimals, signed=signed),
+        sub,
+        count_target=(value * 100) if value is not None else None,
+        count_decimals=decimals,
+        count_suffix="%",
+        count_signed=signed,
+    )
+
+
+def stat_tile_num(label: str, value: float | None, decimals: int = 3, *, signed: bool = False, sub: str | None = None) -> str:
+    """`stat_tile` for a plain (non-percent) number, e.g. CAPM beta or an F-statistic."""
+    return stat_tile(
+        label,
+        fmt_num(value, decimals, signed=signed),
+        sub,
+        count_target=value,
+        count_decimals=decimals,
+        count_suffix="",
+        count_signed=signed,
+    )
+
+
+def stat_tile_ratio(label: str, value: float | None, decimals: int = 2, *, sub: str | None = None) -> str:
+    """`stat_tile` for a ratio (Sharpe), which is never signed with an explicit "+"."""
+    return stat_tile(
+        label,
+        fmt_ratio(value, decimals),
+        sub,
+        count_target=value,
+        count_decimals=decimals,
+        count_suffix="",
+        count_signed=False,
     )
 
 
@@ -407,7 +472,17 @@ def diverging_bar_chart(
             f'<title>{esc(row.label)}: {esc(value_fmt(row.value))}'
             + (f" ({esc(tooltip_extra)})" if tooltip_extra else "")
             + "</title>"
+            # `viz-bar-reveal`/`data-reveal-order` (Phase 10g, decision 0015 §4): the client
+            # scales this group from `scaleX: 0` at the zero baseline up to its real SSR'd
+            # width -- the bar's own geometry (the `<path>` below) never changes, only a CSS
+            # transform wraps it. `transform-origin` is pinned to the zero baseline in *chart*
+            # pixel coordinates (not a `%` of the group's own bounding box, which would anchor
+            # off-center for a negative bar) so both positive and negative bars grow outward
+            # from zero, matching where the bar visually starts.
+            f'<g class="viz-bar-reveal" data-reveal-order="{i}" '
+            f'style="transform-origin:{zero_x:.2f}px {bar_y + bar_h / 2:.2f}px">'
             f'<path d="{_hbar_path(zero_x, x1, bar_y, bar_h, 4)}" fill="{color}" />'
+            "</g>"
             "</g>"
         )
         # value label, always outside the bar end (never clipped)
@@ -431,13 +506,18 @@ def diverging_bar_chart(
             wy = bar_y + bar_h + 8
             wx0 = zero_x + row.ci_lower * scale
             wx1 = zero_x + row.ci_upper * scale
+            # `viz-whisker-reveal` (Phase 10g, decision 0015 §4): fades in ~100ms after this
+            # row's own bar finishes growing (a whisker appearing before its bar exists reads
+            # as meaningless) -- matched to the bar above by the same `data-reveal-order`.
             svg_rows.append(
+                f'<g class="viz-whisker-reveal" data-reveal-order="{i}">'
                 f'<line x1="{wx0:.2f}" y1="{wy:.2f}" x2="{wx1:.2f}" y2="{wy:.2f}" '
                 f'stroke="var(--text-secondary)" stroke-width="1.5" />'
                 f'<line x1="{wx0:.2f}" y1="{wy - 4:.2f}" x2="{wx0:.2f}" y2="{wy + 4:.2f}" '
                 f'stroke="var(--text-secondary)" stroke-width="1.5" />'
                 f'<line x1="{wx1:.2f}" y1="{wy - 4:.2f}" x2="{wx1:.2f}" y2="{wy + 4:.2f}" '
                 f'stroke="var(--text-secondary)" stroke-width="1.5" />'
+                "</g>"
             )
             svg_rows.append(
                 f'<text x="{left_w - 12:.2f}" y="{wy + 3:.2f}" font-size="10" text-anchor="end" '
@@ -548,9 +628,12 @@ def frontier_chart(
 
     sorted_frontier = sorted(frontier, key=lambda p: p.volatility)
     poly_points = " ".join(f"{px(p.volatility):.2f},{py(p.ret):.2f}" for p in sorted_frontier)
+    # `viz-frontier-polyline` (Phase 10g, decision 0015 §4): the client measures this path's
+    # own length (`getTotalLength()`) and draws it in via `stroke-dashoffset` -- no server
+    # change needed for the technique itself, only this hook class.
     frontier_line = (
-        f'<polyline points="{poly_points}" fill="none" stroke="var(--series-1)" '
-        f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
+        f'<polyline class="viz-frontier-polyline" points="{poly_points}" fill="none" '
+        f'stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />'
     )
     frontier_dots = []
     for p in sorted_frontier:
@@ -650,7 +733,20 @@ def frontier_chart(
         f'<circle cx="{px(current.volatility):.2f}" cy="{py(current.ret):.2f}" r="15" '
         f'fill="var(--series-2)" opacity="0.16" />'
     )
-    marks_svg = [marker_shape_svg(s["point"], s["color"], s["shape"], s["r"]) for s in marker_specs]
+    # `viz-marker-pop` (Phase 10g, decision 0015 §4): GMV -> max-Sharpe -> current-portfolio
+    # pop in, in that DOM/marker order, once the frontier curve above finishes drawing --
+    # `data-marker-order` is redundant with DOM order here (kept for the client's stagger
+    # bookkeeping) but not load-bearing for placement itself. The halo travels inside the
+    # current-portfolio marker's own group so it pops in together with the iris, not before it.
+    marks_svg = [
+        (
+            f'<g class="viz-marker-pop" data-marker-order="{idx}">'
+            f'{current_halo if s is marker_specs[-1] else ""}'
+            f'{marker_shape_svg(s["point"], s["color"], s["shape"], s["r"])}'
+            "</g>"
+        )
+        for idx, s in enumerate(marker_specs)
+    ]
     hovers_svg = [marker_hover_svg(s["point"], s["full"], s["tt_extra"]) for s in marker_specs]
 
     # Union-find clustering of markers within COINCIDENT_PX of each other in
@@ -758,7 +854,7 @@ def frontier_chart(
         f'<div class="viz-chart-wrap"><svg viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Efficient frontier chart">'
         f"{''.join(grid)}{frontier_line}{''.join(frontier_dots)}{connector}"
-        f"{current_halo}{''.join(marks_svg)}{''.join(hovers_svg)}{''.join(labels_svg)}"
+        f"{''.join(marks_svg)}{''.join(hovers_svg)}{''.join(labels_svg)}"
         f'<text x="{left + plot_w / 2:.2f}" y="{height - 6}" font-size="11.5" text-anchor="middle" '
         f'fill="var(--text-secondary)">Annualized volatility</text>'
         f'<text x="14" y="{top + plot_h / 2:.2f}" font-size="11.5" fill="var(--text-secondary)" '
@@ -803,7 +899,12 @@ def risk_split_bar(explained_share: float, idiosyncratic_share: float, *, width:
         f'data-tt-value="{esc(fmt_pct(explained_share, 1))}" '
         f'data-tt-extra="Share of return variance explained by the fitted factor model (R²)">'
         f"<title>Factor-explained: {esc(fmt_pct(explained_share, 1))} of return variance</title>"
+        # Reuses `viz-bar-reveal` from the diverging-bar chart (Phase 10g, decision 0015 §4) --
+        # same scaleX-from-origin technique, anchored at this segment's own left edge (0) since
+        # a stacked split-bar has no shared zero baseline the way the diverging charts do.
+        f'<g class="viz-bar-reveal" data-reveal-order="0" style="transform-origin:0px {bar_h / 2:.2f}px">'
         f'<path d="{seg1_path}" fill="var(--series-1)" />'
+        "</g>"
         "</g>"
     )
     seg2 = ""
@@ -814,7 +915,9 @@ def risk_split_bar(explained_share: float, idiosyncratic_share: float, *, width:
             f'data-tt-value="{esc(fmt_pct(idiosyncratic_share, 1))}" '
             f'data-tt-extra="Share of return variance not explained by the factor model (1 - R²)">'
             f"<title>Idiosyncratic: {esc(fmt_pct(idiosyncratic_share, 1))} of return variance</title>"
+            f'<g class="viz-bar-reveal" data-reveal-order="1" style="transform-origin:{seg2_x:.2f}px {bar_h / 2:.2f}px">'
             f'<path d="{seg2_path}" fill="var(--text-muted)" />'
+            "</g>"
             "</g>"
         )
 

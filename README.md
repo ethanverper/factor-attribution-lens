@@ -50,8 +50,14 @@ Python 3.11 + FastAPI + Pydantic v2, dependency-managed with
 
 ```bash
 uv sync
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload --reload-dir app
 ```
+
+`--reload-dir app` scopes the watcher to this project's own source tree.
+Without it, `--reload` watches the entire project root by default —
+including `.venv/`, which holds thousands of dependency files (pandas,
+numpy, etc.) — causing constant spurious reloads triggered by unrelated
+package internals, not actual code changes.
 
 Then, for example:
 
@@ -234,8 +240,9 @@ for Phase 10 QA).
 ## Development
 
 ```bash
-uv sync                 # installs runtime + dev (pytest) dependencies
-uv run pytest -v        # runs the full test suite
+uv sync                                            # installs runtime + dev (pytest) dependencies
+uv run pytest -v                                   # runs the full test suite
+uv run uvicorn app.main:app --reload --reload-dir app   # dev server, scoped file watcher
 ```
 
 Phase 1's data-layer/API tests make real network calls against OpenBB and

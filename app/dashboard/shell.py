@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import json
 
-from app.dashboard import diagrams, mark
+from app.dashboard import diagrams, mark, motion
 from app.dashboard.viz import esc
 
 NAV_ITEMS: tuple[tuple[str, str], ...] = (
@@ -213,12 +213,19 @@ body { margin: 0; }
 .placeholder-owner { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); margin-top: 16px; }
 
 /* ---- Tools & Technologies ---- */
-.tool-groups { display: flex; flex-direction: column; gap: 18px; }
-.tool-group h3 { font-family: var(--font-display); font-weight: 500; font-size: 15.5px; margin: 0 0 8px; }
-.tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.tool-list li { font-size: 13px; color: var(--text-secondary); display: flex; gap: 8px; align-items: baseline; }
-.tool-list .tool-name { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-primary); font-weight: 600;
-  flex: none; min-width: 168px; }
+/* Phase 10g / decision 0015 rule 13: entries are now substantial (a sentence or two tying
+   each to its real use in this project), not short tags -- a `flex row: name | short phrase`
+   layout (Phase 9c's original) reads cramped/misaligned at this length, so each entry stacks
+   name-then-description, closer to the References & Formulas cards' rhythm. */
+.tool-groups { display: flex; flex-direction: column; gap: 22px; }
+.tool-group h3 { font-family: var(--font-display); font-weight: 500; font-size: 15.5px; margin: 0 0 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.tool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.tool-list li { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.tool-list .tool-name { display: block; font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--text-primary); font-weight: 600; margin-bottom: 3px; }
+.tool-list code { font-family: var(--font-mono); font-size: 12px; background: var(--page-plane);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text-primary); }
 
 /* ---- References & Formulas ---- */
 .ref-groups { display: flex; flex-direction: column; gap: 16px; }
@@ -339,12 +346,33 @@ body { margin: 0; }
 .holdings-col-labels span { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--text-muted); }
 .holdings-col-labels .hcl-ticker { flex: 1 1 auto; }
-.holdings-col-labels .hcl-weight { flex: 0 1 130px; }
+.holdings-col-labels .hcl-weight { flex: 0 1 168px; }
 .holdings-col-labels .hcl-spacer { flex: 0 0 34px; }
 .holding-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
 .holding-row .field { flex: 1 1 auto; }
 .holding-row input[name="weight"] { width: 100%; font-family: var(--font-mono); }
-.weight-field { flex: 0 1 130px; }
+.weight-field { flex: 0 1 168px; }
+
+/* ---- Allocation: paired number + range control (Phase 10g, decision 0015 §5) ----
+   The number stays the value of record (exact entry, e.g. "33.33") -- the range is a
+   second, faster way to set the same value, two-way bound client-side. Track fill is
+   painted by JS (`motion.py`) as a two-stop gradient, since a plain <input type=range>
+   has no CSS-only way to show "filled up to value" without either JS or vendor-prefixed
+   pseudo-element trickery that doesn't agree across browsers. */
+.weight-control { display: flex; flex-direction: column; gap: 8px; }
+.weight-number { width: 100%; }
+.weight-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+  border-radius: 999px; background: var(--border); outline: none; cursor: pointer; margin: 4px 0 2px; }
+.weight-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--signal); border: 2px solid var(--surface-1);
+  box-shadow: 0 0 0 1px var(--border); cursor: pointer; transition: transform 120ms ease-out; }
+.weight-range::-webkit-slider-thumb:active { transform: scale(1.15); }
+.weight-range::-moz-range-track { background: transparent; height: 4px; border-radius: 999px; }
+.weight-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--signal);
+  border: 2px solid var(--surface-1); box-shadow: 0 0 0 1px var(--border); cursor: pointer;
+  transition: transform 120ms ease-out; }
+.weight-range::-moz-range-thumb:active { transform: scale(1.15); }
+.weight-range:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .row-remove { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted);
   width: 34px; height: 38px; cursor: pointer; font-size: 15px; flex: none; }
 .row-remove:hover { color: var(--diverging-neg); }
@@ -354,7 +382,9 @@ body { margin: 0; }
 .helper-btn { border-style: solid; }
 .helper-btn:hover { border-color: var(--signal); color: var(--signal); }
 .alloc-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 14px;
-  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--page-plane); }
+  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--page-plane);
+  transition: background-color 200ms ease-out, border-color 200ms ease-out; }
+.alloc-total-value { transition: color 200ms ease-out; }
 .alloc-total-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--text-muted); }
 .alloc-total-value { font-family: var(--font-mono); font-weight: 700; font-size: 15px; color: var(--text-primary); }
@@ -400,7 +430,13 @@ body { margin: 0; }
 .freshness-banner .disclaimer { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .section-title { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--text-muted); margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.section-title:first-of-type { margin-top: 8px; }
+/* Phase 10g: each numbered section is now wrapped in its own `.results-section` (so the
+   entrance-choreography/scroll-reveal script, `motion.py`, can target and observe them
+   individually) -- `:first-of-type` on `.results-section` itself (not on `.section-title`,
+   which would now match inside *every* wrapper, since each is the only `.section-title`
+   child of its own parent) keeps the original "first section sits closer to the freshness
+   banner above it" spacing. */
+.results-section:first-of-type .section-title { margin-top: 8px; }
 
 /* ---- Results empty state ---- */
 .empty-results { border: 1px dashed var(--baseline); border-radius: var(--radius-lg); padding: 32px 30px;
@@ -435,6 +471,20 @@ body { margin: 0; }
 .iris-loading-sub { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) {
   .iris-anim, .iris-anim .iris-core, .iris-anim .iris-ring-mid { animation: none; }
+}
+
+/* ---- Hover/press transitions (Phase 10g, decision 0015 §1) ----
+   These states themselves were designed in decisions 0008-0013; they just never
+   eased into place -- this is the only change, no new colors or states. */
+.hero-cta, .hero-cta-secondary, .quickstart-btn, .submit-btn, .helper-btn,
+.add-row-btn, .share-btn, .theme-btn, .row-remove, .nav-item, .learn-xref {
+  transition: background-color 160ms ease-out, border-color 160ms ease-out,
+              color 160ms ease-out, box-shadow 160ms ease-out,
+              filter 160ms ease-out, transform 120ms ease-out;
+}
+button:active, a[role="button"]:active, .hero-cta:active, .submit-btn:active,
+.quickstart-btn:active, .helper-btn:active {
+  transform: scale(0.97);
 }
 
 @media (max-width: 860px) {
@@ -496,7 +546,10 @@ def _shell_script() -> str:
     });
     if (pushHash) { history.replaceState(null, '', '#' + id); }
     var panel = document.querySelector('[data-tab-panel="' + id + '"]');
-    if (panel) panel.scrollIntoView({ block: 'start' });
+    if (panel) {
+      if (window.__flTabFadeIn) window.__flTabFadeIn(panel);
+      panel.scrollIntoView({ block: 'start' });
+    }
   }
   buttons.forEach(function (b) {
     b.addEventListener('click', function () { activate(b.getAttribute('data-tab-target'), true); });
@@ -588,9 +641,11 @@ def _shell_script() -> str:
     addBtn.addEventListener('click', function () {
       var tpl = document.getElementById('holding-row-template');
       var frag = tpl.content.cloneNode(true);
-      document.getElementById('holdings-rows').appendChild(frag);
-      var rows = document.getElementById('holdings-rows').querySelectorAll('[data-combobox]');
+      var holdingsRows = document.getElementById('holdings-rows');
+      holdingsRows.appendChild(frag);
+      var rows = holdingsRows.querySelectorAll('[data-combobox]');
       window.__flInitCombobox(rows[rows.length - 1]);
+      if (window.__flInitWeightControls) window.__flInitWeightControls(holdingsRows);
     });
   }
 
@@ -646,7 +701,10 @@ def _shell_script() -> str:
     window.__flRecalcAlloc = recalcAlloc;
 
     rowsContainer.addEventListener('input', function (e) {
-      if (e.target && e.target.name === 'weight') recalcAlloc();
+      if (e.target && e.target.name === 'weight') {
+        recalcAlloc();
+        if (window.__flSyncWeightRange) window.__flSyncWeightRange(e.target);
+      }
     });
 
     var splitBtn = document.getElementById('split-evenly-btn');
@@ -657,12 +715,15 @@ def _shell_script() -> str:
         var base = Math.floor((100 / rows.length) * 100) / 100;
         var assigned = 0;
         rows.forEach(function (row, i) {
-          var input = row.querySelector('input[name="weight"]');
           var val = (i === rows.length - 1) ? round2(100 - assigned) : base;
           assigned = round2(assigned + val);
-          input.value = val;
+          // Sweeps the changed number+range values into place (decision 0015 S5) rather than
+          // snapping instantly -- `__flTweenWeight` falls back to an instant set (then still
+          // calls `recalcAlloc`) when GSAP is unavailable or reduced motion is requested.
+          if (window.__flTweenWeight) window.__flTweenWeight(row, val);
+          else { row.querySelector('input[name="weight"]').value = val; }
         });
-        recalcAlloc();
+        if (!window.__flTweenWeight) recalcAlloc();
       });
     }
 
@@ -682,12 +743,12 @@ def _shell_script() -> str:
         }
         var assigned = 0;
         rows.forEach(function (row, i) {
-          var input = row.querySelector('input[name="weight"]');
           var val = (i === rows.length - 1) ? round2(100 - assigned) : round2((values[i] / sum) * 100);
           assigned = round2(assigned + val);
-          input.value = val;
+          if (window.__flTweenWeight) window.__flTweenWeight(row, val);
+          else { row.querySelector('input[name="weight"]').value = val; }
         });
-        recalcAlloc();
+        if (!window.__flTweenWeight) recalcAlloc();
       });
     }
 
@@ -878,8 +939,10 @@ def render_app_shell(
   </div>
 </div>
 {ticker_data_script}
+{motion.GSAP_VENDOR_SCRIPT_TAG}
 <script>{viz.CHART_SCRIPT}</script>
 <script>{_shell_script()}</script>
+<script>{motion.MOTION_SCRIPT}</script>
 </body>
 </html>"""
 
@@ -933,49 +996,139 @@ References &amp; Formulas for the exact math, formula-by-formula, with sources.<
 
 
 def render_tools_section() -> str:
+    """Phase 10g / decision 0015 §2 (rule 13): five categories, each entry tied to what it
+    actually did in *this* project (not a generic "some data tools" list) -- content is the
+    decision's own, dropped in verbatim rather than re-originated. Framed against
+    `docs/about-me.md`'s reinforcement-vs-new-territory lens: CAPM/Fama-French/Markowitz
+    reinforce Ethan's existing academic quant depth, while the live-data integration, a real
+    deployed FastAPI app, and now a hand-built interaction layer are the genuinely new
+    territory this project pushes into."""
+
     def group(title: str, items: list[tuple[str, str]]) -> str:
-        rows = "".join(f'<li><span class="tool-name">{esc(n)}</span><span>{esc(d)}</span></li>' for n, d in items)
+        rows = "".join(f'<li><span class="tool-name">{esc(n)}</span><span>{d}</span></li>' for n, d in items)
         return f'<div class="tool-group"><h3>{esc(title)}</h3><ul class="tool-list">{rows}</ul></div>'
 
     body = "".join(
         [
             group(
-                "Application & API",
+                "Languages",
                 [
-                    ("Python 3.11", "language runtime"),
-                    ("FastAPI", "HTTP layer for the JSON API and the server-rendered dashboard"),
-                    ("Pydantic v2", "request/response schema validation, holdings/portfolio contracts"),
-                    ("uv", "dependency management and lockfile (`uv.lock`)"),
+                    (
+                        "Python 3.11",
+                        "the entire application, from the OpenBB/Kenneth French data layer through the "
+                        "FastAPI HTTP layer to every hand-built inline-SVG chart. One language end to end, "
+                        "not a Python-backend/JS-frontend split.",
+                    ),
+                    (
+                        "Vanilla JavaScript",
+                        "(no transpile/build step) &mdash; the ticker combobox's search/keyboard-nav, tab "
+                        "navigation, the allocation live-total badge, and (Phase 10g) the interaction/motion "
+                        "layer below &mdash; deliberately framework-free given the server-rendered architecture.",
+                    ),
                 ],
             ),
             group(
-                "Market & factor data",
+                "Frameworks & libraries",
                 [
-                    ("OpenBB Open Data Platform", "equity and benchmark price history (yfinance provider)"),
-                    ("Kenneth French's Data Library", "Fama-French 3-/5-factor and risk-free return series, via pandas-datareader"),
+                    (
+                        "FastAPI",
+                        "the HTTP layer for both the JSON <code>/portfolio/returns</code> API and the "
+                        "server-rendered dashboard routes (<code>GET /</code>, <code>POST /dashboard</code>).",
+                    ),
+                    (
+                        "Pydantic v2",
+                        "typed request/response schemas for holdings, weights, and date ranges; the layer that "
+                        "rejects invalid submissions (duplicate symbols, bad date ranges, allocations that "
+                        "don't sum to 100%) before any model runs.",
+                    ),
+                    (
+                        "uv",
+                        "dependency management and a reproducible lockfile; also the tool that made trimming "
+                        "the OpenBB dependency footprint from 62 packages to 3 (Phase 10e) auditable and "
+                        "reproducible.",
+                    ),
+                    (
+                        "GSAP",
+                        "(Phase 10g) &mdash; the interaction/motion layer: entrance choreography, count-up data "
+                        "reveals, SVG chart draw-ins. Self-hosted (vendored, not CDN), framework-agnostic core "
+                        "&mdash; doesn't require adopting a client framework.",
+                    ),
                 ],
             ),
             group(
-                "Quantitative core",
+                "Data & quant methods",
                 [
-                    ("NumPy / pandas", "return-series alignment and array math"),
-                    ("statsmodels", "OLS regression with Newey-West HAC standard errors (CAPM, Fama-French)"),
-                    ("SciPy (SLSQP)", "constrained optimization for the long-only Markowitz efficient frontier"),
+                    (
+                        "OpenBB Open Data Platform",
+                        "(yfinance provider) &mdash; live equity and benchmark price history; the real "
+                        "market-data backbone, not a static CSV.",
+                    ),
+                    (
+                        "Kenneth French's Data Library",
+                        "(via pandas-datareader) &mdash; the actual Fama-French 3-/5-factor and risk-free return "
+                        "series, sourced directly since OpenBB's Open Data Platform doesn't carry factor series "
+                        "at all (a real integration finding &mdash; decision 0002).",
+                    ),
+                    (
+                        "CAPM",
+                        "single-factor market-beta regression with Newey-West HAC standard errors, not a raw "
+                        "OLS slope.",
+                    ),
+                    (
+                        "Fama-French 3-/5-factor model",
+                        "multi-factor loadings (size, value, profitability, investment) with the same "
+                        "HAC-robust diagnostics.",
+                    ),
+                    (
+                        "statsmodels",
+                        "the OLS engine underneath both, configured for heteroskedasticity/autocorrelation-"
+                        "consistent standard errors rather than textbook-default OLS.",
+                    ),
+                    (
+                        "Markowitz mean-variance optimization",
+                        "via <strong>SciPy (SLSQP)</strong> &mdash; long-only constrained efficient frontier, "
+                        "with eigenvalue-clipping covariance regularization for near-singular holding sets.",
+                    ),
+                    (
+                        "NumPy / pandas",
+                        "aligning return series across sources with different native frequencies (equities, "
+                        "benchmark, factors) and the array/matrix math underneath the optimizer and "
+                        "regressions.",
+                    ),
                 ],
             ),
             group(
-                "Presentation",
+                "Presentation & rendering",
                 [
-                    ("Hand-built inline SVG", "every chart, no client-side charting library (see decision 0004)"),
-                    ("Vanilla JavaScript", "tab navigation, the ticker combobox, theme toggle &mdash; no framework or build step"),
-                    ("Server-rendered HTML/CSS", "no Jinja2; pages assembled as plain Python string templates"),
+                    (
+                        "Hand-built inline SVG",
+                        "every chart (diverging bars with CI whiskers, the Markowitz frontier, the "
+                        "Learning-section diagrams) drawn directly as SVG geometry from computed statistics, no "
+                        "charting library (decision 0004) &mdash; the entire render path stays in Python/plain "
+                        "HTML.",
+                    ),
+                    (
+                        "Server-rendered HTML/CSS",
+                        "(plain Python string templates, no Jinja2) &mdash; every page, including the eight-tab "
+                        "app shell, assembled server-side; no client-side routing or hydration.",
+                    ),
                 ],
             ),
             group(
-                "Quality & delivery",
+                "Infrastructure & delivery",
                 [
-                    ("pytest + httpx", "live, non-mocked end-to-end tests against real market data"),
-                    ("Railway", "planned deployment target (Phase 11)"),
+                    (
+                        "pytest + httpx",
+                        "the test suite, including live (non-mocked) end-to-end tests against real market "
+                        "data, not fixtures.",
+                    ),
+                    ("Railway", "(Phase 11) &mdash; planned deployment target."),
+                    (
+                        "Git/GitHub",
+                        "public repo with <code>docs/roadmap.md</code> and <code>docs/decisions/</code> "
+                        "published alongside the code &mdash; the decision trail is itself part of the "
+                        "deliverable, not just the app.",
+                    ),
                 ],
             ),
         ]
@@ -985,6 +1138,10 @@ def render_tools_section() -> str:
 <h1>What this was actually built with</h1>
 <p class="section-lede">Named and specific, not "some data tools" &mdash; this section doubles as a record
 of the real stack behind the analysis.</p>
+<p class="section-lede">Reinforces existing academic quant depth (CAPM, Fama-French, Markowitz, econometric
+diagnostics) with the production engineering around it &mdash; live multi-source data integration, a real
+deployed app instead of a notebook, and a hand-built interaction layer &mdash; the genuinely new territory
+this project pushes into.</p>
 <div class="tool-groups">{body}</div>
 """
 

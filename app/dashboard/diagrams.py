@@ -33,9 +33,15 @@ DIAGRAM_STYLE = """
 """
 
 
-def _figure(*, aria_label: str, caption: str, body: str, view_box: str) -> str:
+def _figure(*, aria_label: str, caption: str, body: str, view_box: str, diagram_id: str) -> str:
+    """`data-diagram` (Phase 10g, decision 0015 §6) is the one hook the client's scroll-reveal
+    script needs -- an `IntersectionObserver({threshold: 0.4}, {once: true})` fires once per
+    figure carrying this attribute, then dispatches to the reveal sequence matching
+    `diagram_id`. This is deliberately the *only* place in the app that gets scroll-linked
+    motion: Glossary/References/Tools & Technologies are scanning content, not narrative
+    moments, and never receive this attribute (see decision 0015's explicit anti-pattern note)."""
     return f"""
-<figure class="learn-diagram">
+<figure class="learn-diagram" data-diagram="{diagram_id}">
   <div class="viz-chart-wrap">
     <svg viewBox="{view_box}" role="img" aria-label="{aria_label}">{body}</svg>
   </div>
@@ -65,14 +71,19 @@ def capm_decomposition_diagram() -> str:
     seg3_x, seg3_w = seg2_x + seg2_w + gap, 140.0
     total_x, total_w = seg3_x + seg3_w + gap, 150.0
 
-    def block(x: float, w: float, fill: str, token: str, plain: str) -> str:
+    def block(x: float, w: float, fill: str, token: str, plain: str, order: int) -> str:
         cx = x + w / 2
+        # `diag-reveal-item` (Phase 10g, decision 0015 §6): reveals left-to-right, matching
+        # the equation's own reading order -- teaching the additive identity through
+        # sequence, not decorating it.
         return (
+            f'<g class="diag-reveal-item" data-order="{order}">'
             f'<rect x="{x:.1f}" y="{bar_y}" width="{w:.1f}" height="{bar_h}" rx="4" fill="{fill}" />'
             f'<text x="{cx:.1f}" y="{token_y}" font-size="11.5" text-anchor="middle" '
             f'fill="var(--text-muted)">{token}</text>'
             f'<text x="{cx:.1f}" y="{plain_y}" font-size="11" text-anchor="middle" '
             f'fill="var(--text-secondary)">{plain}</text>'
+            "</g>"
         )
 
     def joiner(x_after: float, glyph: str) -> str:
@@ -81,21 +92,26 @@ def capm_decomposition_diagram() -> str:
             f'fill="var(--text-muted)">{glyph}</text>'
         )
 
+    total_group = (
+        f'<g class="diag-reveal-item" data-order="3">'
+        f'<rect x="{total_x:.1f}" y="{bar_y}" width="{total_w:.1f}" height="{bar_h}" rx="4" '
+        f'fill="var(--page-plane)" stroke="var(--text-primary)" stroke-width="1.5" />'
+        f'<text x="{total_x + total_w / 2:.1f}" y="99" font-size="15" font-weight="700" text-anchor="middle" '
+        f'fill="var(--text-primary)">Rp</text>'
+        f'<text x="{total_x + total_w / 2:.1f}" y="{plain_y}" font-size="11" text-anchor="middle" '
+        f'fill="var(--text-secondary)">Total return</text>'
+        "</g>"
+    )
     body = (
         f'<text x="{width / 2:.1f}" y="18" font-size="12.5" text-anchor="middle" '
         f'fill="var(--text-muted)">Rp &minus; Rf = &alpha; + &beta;&middot;(Rm &minus; Rf)</text>'
-        + block(seg1_x, seg1_w, "var(--baseline)", "Rf", "Risk-free")
+        + block(seg1_x, seg1_w, "var(--baseline)", "Rf", "Risk-free", 0)
         + joiner(seg1_x + seg1_w, "+")
-        + block(seg2_x, seg2_w, "var(--series-1)", "&beta;&middot;(Rm&minus;Rf)", "Market exposure (&beta;-scaled)")
+        + block(seg2_x, seg2_w, "var(--series-1)", "&beta;&middot;(Rm&minus;Rf)", "Market exposure (&beta;-scaled)", 1)
         + joiner(seg2_x + seg2_w, "+")
-        + block(seg3_x, seg3_w, "var(--signal)", "&alpha;", "Alpha")
+        + block(seg3_x, seg3_w, "var(--signal)", "&alpha;", "Alpha", 2)
         + joiner(seg3_x + seg3_w, "=")
-        + f'<rect x="{total_x:.1f}" y="{bar_y}" width="{total_w:.1f}" height="{bar_h}" rx="4" '
-        f'fill="var(--page-plane)" stroke="var(--text-primary)" stroke-width="1.5" />'
-        + f'<text x="{total_x + total_w / 2:.1f}" y="99" font-size="15" font-weight="700" text-anchor="middle" '
-        f'fill="var(--text-primary)">Rp</text>'
-        + f'<text x="{total_x + total_w / 2:.1f}" y="{plain_y}" font-size="11" text-anchor="middle" '
-        f'fill="var(--text-secondary)">Total return</text>'
+        + total_group
     )
     return _figure(
         aria_label=(
@@ -111,6 +127,7 @@ def capm_decomposition_diagram() -> str:
         ),
         body=body,
         view_box=f"0 0 {width} {height}",
+        diagram_id="capm",
     )
 
 
@@ -141,13 +158,19 @@ def factor_loading_ci_diagram() -> str:
         wy = top + bar_h + 14
         bar_x0, bar_x1 = zero_x, x_of(value)
         wx0, wx1 = x_of(ci_lo), x_of(ci_hi)
+        # `diag-ci-bar`/`diag-ci-whisker`/`diag-ci-verdict` (Phase 10g, decision 0015 §6):
+        # reveal in the order a person should actually read a confidence interval -- the
+        # point estimate appears, then the whisker draws outward from it, then the verdict.
         return (
             f'<text x="{left_w - 12}" y="{cy:.1f}" font-size="12" text-anchor="end" '
             f'fill="var(--text-primary)">{label}</text>'
+            f'<g class="diag-ci-bar">'
             f'<rect x="{min(bar_x0, bar_x1):.1f}" y="{top}" width="{abs(bar_x1 - bar_x0):.1f}" '
             f'height="{bar_h}" rx="4" fill="var(--series-1)" />'
             f'<text x="{bar_x1 + 8:.1f}" y="{cy:.1f}" font-size="10.5" fill="var(--text-secondary)">point estimate</text>'
-            f'<line x1="{wx0:.1f}" y1="{wy:.1f}" x2="{wx1:.1f}" y2="{wy:.1f}" '
+            "</g>"
+            f'<g class="diag-ci-whisker">'
+            f'<line class="diag-ci-whisker-line" x1="{wx0:.1f}" y1="{wy:.1f}" x2="{wx1:.1f}" y2="{wy:.1f}" '
             f'stroke="var(--text-secondary)" stroke-width="1.5" />'
             f'<line x1="{wx0:.1f}" y1="{wy - 4:.1f}" x2="{wx0:.1f}" y2="{wy + 4:.1f}" '
             f'stroke="var(--text-secondary)" stroke-width="1.5" />'
@@ -155,7 +178,8 @@ def factor_loading_ci_diagram() -> str:
             f'stroke="var(--text-secondary)" stroke-width="1.5" />'
             f'<text x="{left_w - 12}" y="{wy + 3:.1f}" font-size="10" text-anchor="end" '
             f'fill="var(--text-muted)">95% CI</text>'
-            f'<text x="{wx1 + 10:.1f}" y="{wy + 3:.1f}" font-size="11" fill="{color}">{verdict}</text>'
+            "</g>"
+            f'<text class="diag-ci-verdict" x="{wx1 + 10:.1f}" y="{wy + 3:.1f}" font-size="11" fill="{color}">{verdict}</text>'
         )
 
     zero_line = (
@@ -190,6 +214,7 @@ def factor_loading_ci_diagram() -> str:
         ),
         body=body,
         view_box=f"0 0 {width} {height}",
+        diagram_id="ci",
     )
 
 
@@ -246,7 +271,10 @@ def frontier_position_diagram() -> str:
         f'<text x="16" y="{top + plot_h / 2:.1f}" font-size="11.5" fill="var(--text-secondary)" '
         f'text-anchor="middle" transform="rotate(-90 16 {top + plot_h / 2:.1f})">Return &rarr;</text>'
     )
-    curve_line = f'<polyline points="{curve}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" />'
+    # `diag-frontier-curve` (Phase 10g, decision 0015 §6): a plain solid stroke, so it gets a
+    # genuine `stroke-dashoffset` draw-in client-side (matching the technique the real
+    # Results frontier chart uses for its own polyline, §4) -- "the curve draws in" literally.
+    curve_line = f'<polyline class="diag-frontier-curve" points="{curve}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" />'
     curve_label = (
         f'<text x="{curve_pts[-1][0] - 6:.1f}" y="{curve_pts[-1][1] - 10:.1f}" font-size="11" text-anchor="end" '
         f'fill="var(--series-1)">Efficient frontier</text>'
@@ -271,22 +299,37 @@ def frontier_position_diagram() -> str:
         f'<text x="{lft_x:.1f}" y="{lft_y - 14:.1f}" font-size="11" text-anchor="middle" fill="var(--text-secondary)">Same return,</text>'
         f'<text x="{lft_x:.1f}" y="{lft_y - 2:.1f}" font-size="11" text-anchor="middle" fill="var(--text-secondary)">less risk</text>'
     )
+    # `diag-frontier-arrow` (Phase 10g, decision 0015 §6): each connector+dot+label pops in
+    # scaled from the current-portfolio dot (`transform-origin` pinned there), reading as the
+    # arrow growing outward from the dot -- `stroke-dashoffset` was deliberately not used here
+    # (unlike the curve above) because these connectors are already dashed decoratively
+    # (`stroke-dasharray="4 3"`, the "gap" visual language), and a dashoffset-based draw-in
+    # would either fight that pattern or require overwriting it and restoring it after, adding
+    # complexity for a shorter, less legible line than the frontier curve itself.
+    up_connector_group = (
+        f'<g class="diag-frontier-arrow" data-arrow-order="0" '
+        f'style="transform-origin:{cur_x:.1f}px {cur_y:.1f}px">{up_connector}{up_dot}</g>'
+    )
+    left_connector_group = (
+        f'<g class="diag-frontier-arrow" data-arrow-order="1" '
+        f'style="transform-origin:{cur_x:.1f}px {cur_y:.1f}px">{left_connector}{left_dot}</g>'
+    )
     # Same concentric-ring aperture marker as the real frontier chart's "current portfolio"
     # point (`viz.py::frontier_chart`'s `shape == "iris"` case) -- this diagram is meant to
     # teach how to read that exact chart, so its own current-position mark should look like
     # the thing it's teaching, not a plain dot the real chart no longer uses.
-    current_halo = f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="15" fill="var(--signal)" opacity="0.16" />'
-    current_dot = (
+    current_group = (
+        f'<g class="diag-frontier-current" style="transform-origin:{cur_x:.1f}px {cur_y:.1f}px">'
+        f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="15" fill="var(--signal)" opacity="0.16" />'
         f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="9" fill="none" stroke="var(--signal)" stroke-width="1.6" />'
         f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="5.8" fill="none" stroke="var(--signal)" stroke-width="1.3" />'
         f'<circle cx="{cur_x:.1f}" cy="{cur_y:.1f}" r="2.4" fill="var(--signal)" stroke="var(--surface-1)" stroke-width="1.5" />'
         f'<text x="{cur_x + 15:.1f}" y="{cur_y + 20:.1f}" font-size="11.5" font-weight="700" '
         f'fill="var(--text-primary)">Your portfolio</text>'
+        "</g>"
     )
 
-    body = (
-        defs + axes + curve_line + curve_label + up_connector + left_connector + up_dot + left_dot + current_halo + current_dot
-    )
+    body = defs + axes + curve_line + curve_label + up_connector_group + left_connector_group + current_group
     return _figure(
         aria_label=(
             "Diagram: a portfolio positioned below a conceptual efficient frontier curve, with two dashed "
@@ -302,4 +345,5 @@ def frontier_position_diagram() -> str:
         ),
         body=body,
         view_box=f"0 0 {width} {height}",
+        diagram_id="frontier",
     )
