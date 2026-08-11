@@ -93,13 +93,19 @@ CHART_STYLE = """
 }
 
 .viz-root { background: var(--page-plane); color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  font-family: var(--font-body, 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif); }
 .viz-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
   box-shadow: var(--shadow-card); padding: 20px 22px; margin-bottom: 20px; }
-.viz-card h2 { font-size: 17px; margin: 0 0 2px; font-weight: 600; }
+.viz-card h2 { font-family: var(--font-display, inherit); font-size: 17px; margin: 0 0 2px; font-weight: 600; }
 .viz-card .viz-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
 .viz-chart-wrap { overflow-x: auto; }
 .viz-chart-wrap svg { width: 100%; height: auto; display: block; min-width: 480px; }
+/* Every chart's SVG text is a *reading* (an axis tick, a bar value, a category/asset name,
+   an annotation) -- route it through the mono readout face so it reads as instrumentation,
+   matching the rest of the app's aggressive mono-for-data convention (decision 0008), rather
+   than inheriting the plain body sans it fell back to pre-Phase-9d. */
+.viz-chart-wrap svg text { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-variant-numeric: tabular-nums; }
 .viz-mark { cursor: pointer; }
 .viz-legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 4px 0 14px; font-size: 12.5px;
   font-family: var(--font-mono, ui-monospace); color: var(--text-secondary); }
@@ -506,6 +512,14 @@ def frontier_chart(
     for i in range(n_x_ticks + 1):
         val = x_max * i / n_x_ticks
         x = px(val)
+        # Vertical gridline completing the panel (horizontal-only gridlines read as a bar
+        # chart's baseline grid, not a scatter/instrument readout) -- same hairline spec as
+        # the horizontal ticks above, skipped at the plot's own left/right frame edges.
+        if 0 < i < n_x_ticks:
+            grid.append(
+                f'<line x1="{x:.2f}" y1="{top:.2f}" x2="{x:.2f}" y2="{top + plot_h:.2f}" '
+                f'stroke="var(--gridline)" stroke-width="1" />'
+            )
         grid.append(
             f'<text x="{x:.2f}" y="{top + plot_h + 18:.2f}" font-size="11" text-anchor="middle" '
             f'fill="var(--text-muted)">{esc(fmt_pct(val, 0))}</text>'
@@ -573,6 +587,14 @@ def frontier_chart(
             max_sharpe, "Max Sharpe (tangency)", "var(--text-muted)", "diamond", 5,
             f"volatility {fmt_pct(max_sharpe.volatility, 2)} · Sharpe {fmt_ratio(max_sharpe.sharpe)}",
         )
+    # A soft amber halo behind "Your portfolio" only -- the one point on this chart the
+    # site's single signal accent should draw the eye to first, echoing the same
+    # armed/active glow already used on buttons and focus rings (decision 0008) rather than
+    # letting the current-portfolio dot sit at the same visual weight as the reference markers.
+    current_halo = (
+        f'<circle cx="{px(current.volatility):.2f}" cy="{py(current.ret):.2f}" r="15" '
+        f'fill="var(--series-2)" opacity="0.16" />'
+    )
     current_svg = marker_group(
         current, "Your portfolio", "var(--series-2)", "circle", 6,
         f"volatility {fmt_pct(current.volatility, 2)} · Sharpe {fmt_ratio(current.sharpe)}",
@@ -606,7 +628,7 @@ def frontier_chart(
     svg = (
         f'<div class="viz-chart-wrap"><svg viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Efficient frontier chart">'
-        f"{''.join(grid)}{frontier_line}{''.join(frontier_dots)}{connector}{gmv_svg}{ms_svg}{current_svg}"
+        f"{''.join(grid)}{frontier_line}{''.join(frontier_dots)}{connector}{gmv_svg}{ms_svg}{current_halo}{current_svg}"
         f'<text x="{left + plot_w / 2:.2f}" y="{height - 6}" font-size="11.5" text-anchor="middle" '
         f'fill="var(--text-secondary)">Annualized volatility</text>'
         f'<text x="14" y="{top + plot_h / 2:.2f}" font-size="11.5" fill="var(--text-secondary)" '

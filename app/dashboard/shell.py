@@ -1065,6 +1065,52 @@ def render_references_section() -> str:
         source="<strong>Source:</strong> Direct algebraic consequence of the OLS fit above (standard regression identity, not a separately published result) &mdash; see the derivation in <code>app/dashboard/attribution.py</code>'s module docstring.",
     )
 
+    ticker_universe_card = card(
+        tag="app/dashboard/tickers.py",
+        title="Ticker &amp; benchmark universe &mdash; curated S&amp;P 500 snapshot",
+        what=(
+            "Backs the Holdings and Benchmark comboboxes on the Inputs tab &mdash; the constrained-input "
+            "control <code>docs/project-standards.md</code> rule 2 requires for anything that must resolve "
+            "to real, fetchable data. Equity holdings are drawn from a curated S&amp;P 500 constituent "
+            "snapshot; the benchmark field is a separate, small set of major index/ETF proxies "
+            "(<code>^GSPC</code>, <code>^DJI</code>, <code>^IXIC</code>, <code>^NDX</code>, <code>^RUT</code>, "
+            "<code>VTI</code>). This is not a formula card like the others above &mdash; it documents the "
+            "provenance of a curated dataset shown to the user, per rule 7."
+        ),
+        formulas=[
+            ("Coverage", "496 equities + 6 benchmark proxies, captured 2026-08-10"),
+            ("Symbol convention", "BRK.B &rarr; BRK-B (dot &rarr; yfinance dash, at entry)"),
+        ],
+        legend=(
+            "This card documents rule 7 (<code>docs/project-standards.md</code>) &mdash; cite the source of "
+            "any curated/constrained option set shown to the user. A brief version of this note also appears "
+            "directly on the Inputs tab, next to the combobox, per rule 7's &ldquo;near the input&rdquo; half."
+        ),
+        note=(
+            "Share-class tickers are normalized to <code>yfinance</code> dash form (not the source dataset's "
+            "dot form) at data-entry time, so every entry is directly usable by Phase 1's unmodified "
+            "price-fetch path with no translation layer needed downstream. Enforced at two layers: the "
+            "client-side combobox's submitted field is only ever set by selecting "
+            "a real option from this list (never raw typed text), and <code>app/dashboard/routes.py</code> "
+            "independently re-validates every submitted symbol/benchmark against "
+            "<code>tickers.is_valid_ticker</code>/<code>is_valid_benchmark</code> server-side before any "
+            "analysis runs &mdash; verified directly with a raw POST carrying an invalid ticker (rejected, "
+            "400). <strong>Known limitation:</strong> this is a static snapshot, not a live index-membership "
+            "feed &mdash; it will drift from the real S&amp;P 500 roster as constituents change (several "
+            "times a year), and a holding outside this list (a small-cap, an ADR, a non-US listing) cannot "
+            "be entered even if it would be perfectly valid on <code>yfinance</code>/OpenBB. Refreshing it "
+            "requires re-running the sourcing process by hand, not a live sync."
+        ),
+        source=(
+            "<strong>Source:</strong> S&amp;P 500 constituent list snapshot captured 2026-08-10, sourced from "
+            "a public constituents dataset mirroring the official S&amp;P Dow Jones Indices membership (the "
+            "same underlying data as Wikipedia's &ldquo;List of S&amp;P 500 companies&rdquo; and the "
+            "commonly-used <code>datasets/s-and-p-500-companies</code> public dataset). Benchmark proxies are "
+            "standard Yahoo Finance index/ETF tickers, not a separately sourced list. Full sourcing/refresh "
+            "policy: <code>docs/decisions/0005-phase7-ticker-universe.md</code>."
+        ),
+    )
+
     return f"""
 <div class="section-eyebrow">[07] References &amp; Formulas</div>
 <h1>The exact math this app computes</h1>
@@ -1072,7 +1118,7 @@ def render_references_section() -> str:
 <code>app/dashboard/attribution.py</code> &mdash; not a generic textbook summary. Each card names the module
 it documents, the real notation used, and a primary source.</p>
 <div class="ref-groups">
-{capm_card}{ff_card}{hac_card}{markowitz_card}{attribution_card}
+{capm_card}{ff_card}{hac_card}{markowitz_card}{attribution_card}{ticker_universe_card}
 </div>
 <div class="ref-card">
   <div class="ref-card-head"><h2>Works cited</h2></div>
