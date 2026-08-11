@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 
+from app.dashboard import diagrams
 from app.dashboard.viz import esc
 
 NAV_ITEMS: tuple[tuple[str, str], ...] = (
@@ -272,8 +273,15 @@ body { margin: 0; }
 .learn-note { font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin-top: 12px;
   padding-top: 12px; border-top: 1px dashed var(--baseline); max-width: 66ch; }
 
-/* ---- Glossary (Phase 9) ---- */
-.glossary-groups { display: flex; flex-direction: column; gap: 10px; }
+/* ---- Glossary (Phase 9, regrouped Phase 9e) ---- */
+.glossary-groups { display: flex; flex-direction: column; gap: 8px; }
+.glossary-group { display: flex; flex-direction: column; gap: 10px; }
+.glossary-group + .glossary-group { margin-top: 18px; padding-top: 22px; border-top: 1px dashed var(--baseline); }
+.glossary-group-head { margin-bottom: 2px; }
+.glossary-group-head h2 { font-family: var(--font-display); font-size: 16.5px; font-weight: 600; margin: 0 0 4px;
+  color: var(--text-primary); }
+.glossary-group-head p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; max-width: 66ch;
+  margin: 0 0 4px; }
 .glossary-entry { background: var(--surface-1); border: 1px solid var(--border); border-radius: 9px;
   padding: 16px 18px; }
 .glossary-term { font-family: var(--font-display); font-size: 15.5px; font-weight: 600; margin: 0 0 8px;
@@ -776,7 +784,7 @@ def render_app_shell(
 {meta_html}
 {FAVICON_LINK}
 {FONT_LINKS}
-<style>{viz.CHART_STYLE}{SHELL_STYLE}</style>
+<style>{viz.CHART_STYLE}{SHELL_STYLE}{diagrams.DIAGRAM_STYLE}</style>
 </head>
 <body class="viz-root">
 <div class="app-shell">
@@ -1155,13 +1163,31 @@ def render_learning_section() -> str:
     "what does it mean for me" (here) without a jarring shift in how the page is built.
     Cross-links to References & Formulas rather than re-deriving any formula -- this
     section's job is plain-language interpretation and the "so what," not notation.
+
+    Phase 9e adds a real inline SVG diagram (`app/dashboard/diagrams.py`) to three of the
+    four cards -- CAPM decomposition, the factor-loading confidence-interval whisker, and
+    frontier position -- per `docs/project-standards.md` rule 5 (explanations need visual
+    elements, not text walls). The fourth card, return/risk attribution, deliberately has
+    no diagram: it's an exact algebraic identity already shown as notation in its Technical
+    register and as a real table on the Results tab, and a diagram there would just be the
+    same equation redrawn, not a new mechanism made visible -- see decision 0010.
     """
 
-    def card(*, tag: str, title: str, plain: str, technical: str, note: str | None, xrefs: list[tuple[str, str]]) -> str:
+    def card(
+        *,
+        tag: str,
+        title: str,
+        plain: str,
+        technical: str,
+        note: str | None,
+        xrefs: list[tuple[str, str]],
+        diagram: str | None = None,
+    ) -> str:
         xref_html = (
             '<div class="learn-xref-row">' + "".join(_xref(t, label) for t, label in xrefs) + "</div>" if xrefs else ""
         )
         note_html = f'<p class="learn-note">{note}</p>' if note else ""
+        diagram_html = diagram or ""
         return f"""
 <div class="learn-card">
   <div class="learn-card-head"><span class="learn-tag">{tag}</span><h2>{title}</h2></div>
@@ -1173,6 +1199,7 @@ def render_learning_section() -> str:
     <span class="learn-register-label">Technical</span>
     <p>{technical}</p>
   </div>
+  {diagram_html}
   {note_html}
   {xref_html}
 </div>
@@ -1203,6 +1230,7 @@ def render_learning_section() -> str:
         ),
         note=None,
         xrefs=[("references", "See the exact regression"), ("results", "See your beta")],
+        diagram=diagrams.capm_decomposition_diagram(),
     )
 
     ff_card = card(
@@ -1232,6 +1260,7 @@ def render_learning_section() -> str:
         ),
         note=None,
         xrefs=[("references", "See the exact regression"), ("results", "See your loadings")],
+        diagram=diagrams.factor_loading_ci_diagram(),
     )
 
     frontier_card = card(
@@ -1268,6 +1297,7 @@ def render_learning_section() -> str:
             "is why it's a narrower, more realistic object than the textbook unconstrained frontier."
         ),
         xrefs=[("references", "See the exact optimization"), ("results", "See your frontier")],
+        diagram=diagrams.frontier_position_diagram(),
     )
 
     attribution_card = card(
@@ -1306,7 +1336,8 @@ def render_learning_section() -> str:
 <h1>What your numbers actually mean</h1>
 <p class="section-lede">This is the idea's core differentiator: not just computing CAPM beta, Fama-French
 loadings, and a frontier position, but explaining what each one means for your specific portfolio, in both a
-plain-language and a technical register. For the exact notation and sourcing behind every formula referenced
+plain-language and a technical register &mdash; with a real diagram wherever a picture teaches the mechanism
+faster than another paragraph could. For the exact notation and sourcing behind every formula referenced
 below, see References &amp; Formulas &mdash; this section is deliberately the interpretation layer, not a
 second derivation of the math.</p>
 <div class="learn-groups">
@@ -1325,6 +1356,19 @@ def render_glossary_section() -> str:
     each tagged with where in the app it shows up. Mirrors the entry format `educator` also
     writes to `docs/glossary.md` (project) and the Cowork OS root `docs/glossary.md`
     (portfolio-wide) -- kept in sync by hand, this is the copy an actual visitor sees.
+
+    Phase 9e ran a completeness audit against every tab (Overview, Inputs, Results, Learning,
+    References & Formulas, Real World) and found two kinds of real gaps, not cosmetic ones:
+    (1) four terms already correctly written in `docs/glossary.md` (Covariance regularization,
+    Return attribution, Risk attribution, Markowitz mean-variance optimization) had never
+    actually been ported into this live section -- a visitor could see all four used on the
+    Results/References tabs but not find them defined here; (2) five more terms appear
+    repeatedly in the app's own text (F-statistic, excess return, the risk-free rate,
+    covariance matrix, and the compounding-vs-linear-scaling annualization split) with no
+    definition anywhere. Both closed below. Also regrouped the (now 28) entries into three
+    concept areas -- Factor models & regression, Portfolio theory & optimization,
+    Attribution -- since a single 19-entry flat list was already hard to scan and a 28-entry
+    one would be worse; see decision 0010.
     """
 
     def entry(*, term: str, where: str, plain: str, technical: str) -> str:
@@ -1336,15 +1380,23 @@ def render_glossary_section() -> str:
 </div>
 """
 
-    entries = [
+    def group(title: str, note: str, items: list[str]) -> str:
+        return f"""
+<div class="glossary-group">
+  <div class="glossary-group-head"><h2>{title}</h2><p>{note}</p></div>
+  {''.join(items)}
+</div>
+"""
+
+    factor_entries = [
         entry(
-            term="Alpha (&alpha;)",
-            where="Results §1, Learning, References",
-            plain="The part of your average return that isn't explained by the market (or, in Fama-French, by "
-            "any of the named factors) &mdash; whatever's left over.",
-            technical="The OLS regression intercept. Reported both as the raw periodic estimate and, "
-            "annualized by compounding, as &ldquo;alpha (annualized).&rdquo; A statistically significant "
-            "nonzero alpha means the model's factors don't fully account for your realized average return.",
+            term="CAPM (Capital Asset Pricing Model)",
+            where="Overview, Results §1, Learning, References",
+            plain="A one-factor way of explaining a portfolio's return: how much of it is just \"the market, "
+            "scaled up or down.\"",
+            technical="Sharpe (1964)/Lintner (1965)/Mossin (1966): "
+            "<code>R<sub>p</sub> &minus; R<sub>f</sub> = &alpha; + &beta;(R<sub>m</sub> &minus; R<sub>f</sub>) "
+            "+ &epsilon;</code>, fit by OLS with HAC standard errors in this project.",
         ),
         entry(
             term="Beta (&beta;)",
@@ -1355,22 +1407,41 @@ def render_glossary_section() -> str:
             "estimate.",
         ),
         entry(
-            term="CAPM (Capital Asset Pricing Model)",
+            term="Alpha (&alpha;)",
             where="Results §1, Learning, References",
-            plain="A one-factor way of explaining a portfolio's return: how much of it is just \"the market, "
-            "scaled up or down.\"",
-            technical="Sharpe (1964)/Lintner (1965)/Mossin (1966): "
-            "<code>R<sub>p</sub> &minus; R<sub>f</sub> = &alpha; + &beta;(R<sub>m</sub> &minus; R<sub>f</sub>) "
-            "+ &epsilon;</code>, fit by OLS with HAC standard errors in this project.",
+            plain="The part of your average return that isn't explained by the market (or, in Fama-French, by "
+            "any of the named factors) &mdash; whatever's left over.",
+            technical="The OLS regression intercept. Reported both as the raw periodic estimate and, "
+            "annualized by compounding, as &ldquo;alpha (annualized).&rdquo; A statistically significant "
+            "nonzero alpha means the model's factors don't fully account for your realized average return.",
         ),
         entry(
-            term="Efficient frontier",
-            where="Results §2, Learning, References",
-            plain="The best return historically achievable, for each level of risk, by re-weighting the exact "
-            "holdings you entered &mdash; no new stocks, no leverage, no shorting.",
-            technical="The set of long-only portfolios minimizing <code>w<sup>T</sup>&Sigma;w</code> for each "
-            "target <code>w<sup>T</sup>&mu;</code>, solved point-by-point via SLSQP since long-only "
-            "mean-variance optimization has no closed form (Markowitz, 1952).",
+            term="Excess return",
+            where="Results §1 &amp; §3, Learning, References",
+            plain="Your return (or the market's, or a factor's) after subtracting what you could have earned "
+            "with essentially no risk over the same period &mdash; the number every formula on this app is "
+            "actually built from, not the raw return.",
+            technical="<code>R &minus; R<sub>f</sub></code> for whichever series is being described. CAPM and "
+            "Fama-French are both fit on excess return, not raw return, so the risk-free rate is subtracted "
+            "before &alpha;/&beta; are ever estimated.",
+        ),
+        entry(
+            term="Risk-free rate (R<sub>f</sub>)",
+            where="Results §1, §2 &amp; §3, References",
+            plain="What you could earn with (essentially) no risk over the same period &mdash; the baseline "
+            "every return in this app is measured against.",
+            technical="Sourced from Kenneth French's Data Library (not OpenBB, see decision 0002), aligned to "
+            "the same dates/frequency as the portfolio and benchmark returns before any regression or "
+            "optimization runs.",
+        ),
+        entry(
+            term="Fama-French 3-/5-factor model",
+            where="Overview, Results §1, Learning, References",
+            plain="An extension of CAPM that explains a portfolio's return using several named style factors "
+            "instead of just \"the market.\"",
+            technical="Fama &amp; French (1993, 2015). 3-factor adds SMB and HML to CAPM's market factor; "
+            "5-factor adds RMW and CMA on top of that. Fit by OLS with HAC standard errors in this project; "
+            "factor return series sourced from Kenneth French's Data Library, not OpenBB.",
         ),
         entry(
             term="Factor loading",
@@ -1379,15 +1450,6 @@ def render_glossary_section() -> str:
             "cheap vs. expensive, profitable vs. not, conservative vs. aggressive.",
             technical="A partial-regression coefficient in the Fama-French model &mdash; sensitivity to one "
             "factor's spread-portfolio return, holding the other included factors fixed.",
-        ),
-        entry(
-            term="Fama-French 3-/5-factor model",
-            where="Results §1, Learning, References",
-            plain="An extension of CAPM that explains a portfolio's return using several named style factors "
-            "instead of just \"the market.\"",
-            technical="Fama &amp; French (1993, 2015). 3-factor adds SMB and HML to CAPM's market factor; "
-            "5-factor adds RMW and CMA on top of that. Fit by OLS with HAC standard errors in this project; "
-            "factor return series sourced from Kenneth French's Data Library, not OpenBB.",
         ),
         entry(
             term="SMB (Small Minus Big) &mdash; the size factor",
@@ -1422,6 +1484,99 @@ def render_glossary_section() -> str:
             "high-investment (aggressive) firms; Fama-French 5-factor only.",
         ),
         entry(
+            term="R&sup2; (R-squared) &amp; adjusted R&sup2;",
+            where="Results §1 &amp; §3, Learning, References",
+            plain="How much of your portfolio's up-and-down movement is explained by the factor(s) in the "
+            "model, versus left unexplained. Adjusted R&sup2; is the same idea, penalized slightly for adding "
+            "more factors, so it doesn't automatically go up just because 5-factor has more variables than "
+            "3-factor.",
+            technical="Coefficient of determination for the CAPM/Fama-French OLS fit; doubles as the risk-"
+            "attribution split (factor-explained share = R&sup2;, idiosyncratic share = 1 &minus; R&sup2;). "
+            "Adjusted R&sup2; is shown alongside R&sup2; on the Fama-French stat tile specifically so adding "
+            "RMW/CMA isn't mistaken for a better fit when it's really just more free parameters.",
+        ),
+        entry(
+            term="F-statistic",
+            where="Results §1 (Fama-French), References",
+            plain="A different question than any single factor's own p-value: taken together, do all of this "
+            "model's factors explain your return better than assuming none of them matter at all?",
+            technical="The Fama-French regression's overall joint-significance test against an intercept-only "
+            "model, reported with its own p-value (F p-value). A low F p-value means the factors jointly "
+            "explain a statistically significant share of return, independent of whether any one loading's own "
+            "confidence interval excludes zero.",
+        ),
+        entry(
+            term="Newey-West HAC standard errors",
+            where="Results §1, References",
+            plain="A more honest way of measuring how uncertain a beta or factor loading really is, built to "
+            "not be fooled by the fact that stock returns are choppier and stickier day-to-day than a textbook "
+            "regression assumes.",
+            technical="Heteroskedasticity- and autocorrelation-consistent covariance estimator "
+            "(Newey &amp; West, 1987/1994) used for every regression standard error/t-stat/p-value/CI in this "
+            "project, in place of classical OLS standard errors, which would understate them.",
+        ),
+        entry(
+            term="Statistical significance (t-stat, p-value, 95% CI)",
+            where="Results §1, Learning, References",
+            plain="A way of telling a real signal apart from noise: if the confidence interval around a number "
+            "like beta or a factor loading includes zero, you can't be confident the true exposure isn't zero.",
+            technical="Standard OLS-regression diagnostics (t-statistic, two-sided p-value, 95% confidence "
+            "interval) computed from the HAC standard error above for every coefficient this project reports.",
+        ),
+    ]
+
+    portfolio_entries = [
+        entry(
+            term="Efficient frontier",
+            where="Overview, Results §2, Learning, References",
+            plain="The best return historically achievable, for each level of risk, by re-weighting the exact "
+            "holdings you entered &mdash; no new stocks, no leverage, no shorting.",
+            technical="The set of long-only portfolios minimizing <code>w<sup>T</sup>&Sigma;w</code> for each "
+            "target <code>w<sup>T</sup>&mu;</code>, solved point-by-point via SLSQP since long-only "
+            "mean-variance optimization has no closed form (Markowitz, 1952).",
+        ),
+        entry(
+            term="Markowitz mean-variance optimization",
+            where="Overview, References, Real World / Corporate Applications",
+            plain="The math behind &ldquo;what's the best possible return for a given amount of risk,&rdquo; "
+            "using how your holdings have historically moved together.",
+            technical="Models portfolio return as <code>w<sup>T</sup>&mu;</code> and variance as "
+            "<code>w<sup>T</sup>&Sigma;w</code>, then solves for the efficient set, the GMV portfolio, and the "
+            "tangency (max-Sharpe) portfolio (Markowitz, 1952). &mu; and &Sigma; are annualized by linear "
+            "scaling, not compounding &mdash; see Annualization convention below.",
+        ),
+        entry(
+            term="Covariance matrix (&Sigma;)",
+            where="Results §2, References",
+            plain="A table of how every pair of your holdings has historically moved together &mdash; not just "
+            "how volatile each one is on its own, but whether they tend to rise and fall together or offset "
+            "each other.",
+            technical="The annualized covariance matrix of holding returns; portfolio variance is "
+            "<code>w<sup>T</sup>&Sigma;w</code>. In the Markowitz framework, all diversification benefit comes "
+            "from &Sigma;'s off-diagonal (co-movement) terms, not from any single holding's own variance.",
+        ),
+        entry(
+            term="Covariance regularization (eigenvalue clipping)",
+            where="Results §2 (warning banner), Learning, References",
+            plain="A safety net for when a holding set is too small, too correlated, or has too little data to "
+            "produce a trustworthy risk picture &mdash; the app flags it rather than silently producing a "
+            "broken frontier.",
+            technical="If the sample covariance matrix's condition number exceeds 1e8 or it isn't "
+            "positive-semi-definite, negative/near-zero eigenvalues are floored to 1e-6 &times; the largest "
+            "eigenvalue and the matrix reconstructed &mdash; a standard &ldquo;nearest PSD matrix&rdquo; fix "
+            "(decision 0003). Surfaced as &ldquo;covariance regularized&rdquo; on the Results tab whenever it "
+            "triggers.",
+        ),
+        entry(
+            term="Long-only constraint",
+            where="Results §2, Learning, References",
+            plain="The frontier never assumes you could short a stock or borrow money to invest more than you "
+            "have &mdash; only re-weighting among positive holdings of what you actually entered.",
+            technical="<code>w<sub>i</sub> &ge; 0</code> for all holdings in the efficient-frontier optimization; "
+            "this project's default (see decision 0003), reflecting how retail/small-RIA portfolios are "
+            "actually held.",
+        ),
+        entry(
             term="Global minimum-variance (GMV) portfolio",
             where="Results §2, Learning",
             plain="Of every way you could re-weight your exact holdings, the single weighting that historically "
@@ -1447,12 +1602,38 @@ def render_glossary_section() -> str:
             "(Sharpe, 1966/1994).",
         ),
         entry(
-            term="R&sup2; (R-squared)",
-            where="Results §1 &amp; §3, Learning, References",
-            plain="How much of your portfolio's up-and-down movement is explained by the factor(s) in the "
-            "model, versus left unexplained.",
-            technical="Coefficient of determination for the CAPM/Fama-French OLS fit; doubles as the risk-"
-            "attribution split (factor-explained share = R&sup2;, idiosyncratic share = 1 &minus; R&sup2;).",
+            term="Annualization convention (compounding vs. linear scaling)",
+            where="Results §1, §2 &amp; §3, References",
+            plain="Two different, both-correct ways this app turns a per-day (or per-month) number into a "
+            "per-year one &mdash; CAPM/Fama-French alpha uses one, the frontier's inputs use the other, on "
+            "purpose, not by accident.",
+            technical="Alpha is annualized by compounding, <code>(1 + &alpha;)<sup>periods/yr</sup> &minus; "
+            "1</code>, matching how a return actually accrues. The frontier's &mu; and &Sigma; are annualized "
+            "by <em>linear</em> scaling (periodic &times; periods/year), the textbook i.i.d.-returns convention "
+            "mean-variance optimization assumes by construction. The two aren't interchangeable &mdash; mixing "
+            "them would break both the return-attribution identity and the frontier's own assumptions "
+            "(decision 0003).",
+        ),
+    ]
+
+    attribution_entries = [
+        entry(
+            term="Return attribution",
+            where="Results §3, Learning, References",
+            plain="Splitting your portfolio's average return into pieces &mdash; how much came from market "
+            "exposure, how much from each style tilt, and how much is unexplained (&ldquo;alpha&rdquo;).",
+            technical="An exact OLS identity, not an approximation: because the Fama-French fit includes an "
+            "intercept, the fitted residual has zero mean over the sample, so "
+            "<code>mean(R<sub>p</sub> &minus; R<sub>f</sub>) = &alpha; + &Sigma;<sub>i</sub> &beta;<sub>i</sub>"
+            "&middot;mean(factor<sub>i</sub>)</code> reproduces the realized mean exactly.",
+        ),
+        entry(
+            term="Risk attribution",
+            where="Results §3, Learning, References",
+            plain="Splitting your portfolio's risk into the share explained by broad factors versus the share "
+            "specific to your individual holdings.",
+            technical="factor-explained share = R&sup2; (clipped to [0,1] for display), idiosyncratic share = "
+            "1 &minus; R&sup2;, of the fitted factor model.",
         ),
         entry(
             term="Idiosyncratic risk",
@@ -1462,43 +1643,39 @@ def render_glossary_section() -> str:
             technical="<code>1 &minus; R&sup2;</code> of the fitted factor model &mdash; the residual variance "
             "share unexplained by market/size/value/profitability/investment exposure.",
         ),
-        entry(
-            term="Newey-West HAC standard errors",
-            where="Results §1, References",
-            plain="A more honest way of measuring how uncertain a beta or factor loading really is, built to "
-            "not be fooled by the fact that stock returns are choppier and stickier day-to-day than a textbook "
-            "regression assumes.",
-            technical="Heteroskedasticity- and autocorrelation-consistent covariance estimator "
-            "(Newey &amp; West, 1987/1994) used for every regression standard error/t-stat/p-value/CI in this "
-            "project, in place of classical OLS standard errors, which would understate them.",
-        ),
-        entry(
-            term="Statistical significance (t-stat, p-value, 95% CI)",
-            where="Results §1, Learning, References",
-            plain="A way of telling a real signal apart from noise: if the confidence interval around a number "
-            "like beta or a factor loading includes zero, you can't be confident the true exposure isn't zero.",
-            technical="Standard OLS-regression diagnostics (t-statistic, two-sided p-value, 95% confidence "
-            "interval) computed from the HAC standard error above for every coefficient this project reports.",
-        ),
-        entry(
-            term="Long-only constraint",
-            where="Results §2, Learning, References",
-            plain="The frontier never assumes you could short a stock or borrow money to invest more than you "
-            "have &mdash; only re-weighting among positive holdings of what you actually entered.",
-            technical="<code>w<sub>i</sub> &ge; 0</code> for all holdings in the efficient-frontier optimization; "
-            "this project's default (see decision 0003), reflecting how retail/small-RIA portfolios are "
-            "actually held.",
-        ),
     ]
+
+    groups_html = (
+        group(
+            "Factor models &amp; regression",
+            "How a return gets explained: CAPM's single market factor, Fama-French's style factors, and the "
+            "statistical diagnostics that separate a real exposure from noise.",
+            factor_entries,
+        )
+        + group(
+            "Portfolio theory &amp; optimization",
+            "How the efficient frontier is built and read: the math behind &ldquo;best return for a given "
+            "risk,&rdquo; and the conventions/safeguards behind it.",
+            portfolio_entries,
+        )
+        + group(
+            "Attribution",
+            "Putting the exposures back together: exactly how much of your realized return and risk each piece "
+            "above actually accounts for.",
+            attribution_entries,
+        )
+    )
 
     return f"""
 <div class="section-eyebrow">[05] Glossary</div>
 <h1>Terms used in this project</h1>
-<p class="section-lede">Every term this app's Results, Learning, and References &amp; Formulas sections use,
-defined in plain language and technically, with where it shows up. This project glossary also feeds the
-Cowork OS portfolio-wide glossary at <code>docs/glossary.md</code>.</p>
+<p class="section-lede">Every term this app's Overview, Results, Learning, References &amp; Formulas, and Real
+World sections use, defined in plain language and technically, with where it shows up &mdash; grouped by
+concept area (factor models &amp; regression, portfolio theory &amp; optimization, attribution) rather than one
+flat list, so a specific term is easier to find. This project glossary also feeds the Cowork OS portfolio-wide
+glossary at <code>docs/glossary.md</code>.</p>
 <div class="glossary-groups">
-{''.join(entries)}
+{groups_html}
 </div>
 """
 
