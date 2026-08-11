@@ -256,10 +256,15 @@ no mocking) and separately asserts the return-attribution decomposition's
 numeric identity (contributions sum to the realized mean excess return)
 holds against live data, not just synthetic fixtures.
 
-Note: `openbb`'s first import is slow (its dynamic API-tree build can take
-several minutes on a cold run) — this affects `uv run pytest` and `uv run
-uvicorn app.main:app` startup time alike; it is not specific to any one
-test or route.
+Note: `openbb`'s first-ever import triggers a one-time build of its static
+API-tree files (cached to disk after that), which can take on the order of
+tens of seconds depending on disk speed; every subsequent process start —
+`uv run pytest`, `uv run uvicorn app.main:app` — is fast (steady-state
+`openbb` import well under a second). Only `openbb-core`, `openbb-equity`,
+and `openbb-yfinance` are installed (not the full `openbb` meta-package),
+since the app only ever calls `obb.equity.price.historical` via the
+`yfinance` provider — see
+[`docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md`](docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md).
 
 ## Project layout
 
