@@ -1,14 +1,48 @@
 # Factor Lens
 
+Built by [Ethan Verduzco](https://github.com/ethanverper).
+
 A transparent factor-attribution and portfolio-optimization tool for retail
 investors and small RIAs: enter your holdings and get CAPM beta, Fama-French
 factor loadings, and Markowitz efficient-frontier positioning — computed from
 live market data, with plain-language explanations and full statistical
 diagnostics, not a black-box score.
 
-**Live demo, dev mode, and deployment**: see [Running it](#running-it) below.
+**Status**: functionally complete and QA sign-off'd (Phases 1–10j; see
+[Status](#status) below). Not yet deployed to a public URL — see
+[Running it](#running-it) for dev mode in the meantime.
+
 This is internal decision-support analytics only — no personalized
 investment advice, no trade execution, no custody of funds.
+
+## What makes this different from a factor-model script
+
+Most factor-model code stops at the coefficients. Factor Lens treats the
+step after the numbers — explaining what they actually mean for *this*
+portfolio — as the core deliverable, not an afterthought:
+
+- **Interpretation & Key Takeaways** (`app/api/interpretation.py` +
+  `frontend/src/components/InterpretationSection.tsx`) — every analysis run
+  produces a dedicated, visually prominent synthesis: four always-present
+  takeaways (market-exposure precision, Fama-French style-tilt pattern,
+  explanatory power, frontier position), a headline dynamically selected
+  from what's actually most notable in *your* result, and data-quality
+  flags (covariance regularization, a short sample window) surfaced
+  in-line rather than buried in a methodology footnote. It's interpretation,
+  never prescription — no "you should," no "consider rebalancing." See
+  [`docs/decisions/0019-phase10k-interpretation-content.md`](docs/decisions/0019-phase10k-interpretation-content.md).
+- **A real Learning section, not a wall of text** — a curriculum-style,
+  single-open accordion (progress bar, numbered/checkmarked lessons) that
+  breaks every concept into a lead line, bullets, a callout for the one
+  caveat that would otherwise mislead you, a pull-quote for the number that
+  matters most, and a worked example computed from this app's own live
+  data — plus a predict-then-reveal check and a draggable-β diagnostic, not
+  static prose next to a diagram. See
+  [`docs/decisions/0021-phase10n-learning-content-decomposition.md`](docs/decisions/0021-phase10n-learning-content-decomposition.md).
+- **An institutional-finance visual register**, researched directly against
+  live JPMorgan/Goldman Sachs/Chase products rather than a generic SaaS
+  dashboard template — see
+  [`docs/decisions/0020-phase10l-institutional-refinement.md`](docs/decisions/0020-phase10l-institutional-refinement.md).
 
 ## Architecture
 
@@ -36,11 +70,11 @@ app is one process, not two separate services — see
 [`docs/decisions/0018-phase10i-react-rebuild.md`](docs/decisions/0018-phase10i-react-rebuild.md).
 
 The frontend replaced an earlier server-rendered/hand-drawn-SVG dashboard
-(`app/dashboard/`, Phases 3–10h) per the team's default frontend stack
-decision — see
-[`docs/decisions/0004-react-tailwind-shadcn-default-frontend.md`](../../../../docs/decisions/0004-react-tailwind-shadcn-default-frontend.md)
-(Cowork OS root) and
-[`docs/decisions/0017-phase10h-identity-for-react-stack.md`](docs/decisions/0017-phase10h-identity-for-react-stack.md).
+(`app/dashboard/`, Phases 3–10h) per the team's default frontend-stack
+decision (`docs/decisions/0004-react-tailwind-shadcn-default-frontend.md`,
+logged at the internal team-workspace root — not part of this repo) — see
+[`docs/decisions/0017-phase10h-identity-for-react-stack.md`](docs/decisions/0017-phase10h-identity-for-react-stack.md)
+for the React-specific direction that applied it here.
 `app/models/` and `app/data/` are untouched by that rebuild.
 
 ## API
@@ -166,26 +200,44 @@ app/
   api/                Pure JSON API for the React frontend (Phase 10i)
     routes.py           GET /api/tickers, GET /api/sample, POST /api/analysis
     attribution.py        return/risk attribution derived from Phase 2 output
+    interpretation.py       Interpretation & Key Takeaways synthesis (Phase 10k)
     tickers.py              curated S&P 500 + benchmark universe (constrained-input data)
 frontend/            React (Vite + TypeScript) + Tailwind + shadcn/ui SPA (Phase 10i)
   src/
     pages/              one component per section/route
-    components/          shared UI (sidebar, charts, diagrams, ApertureMark, ...)
-    data/                  ported static content (glossary, references, tools, real-world)
+    components/          shared UI: sidebar, charts, diagrams, ApertureMark,
+                            InterpretationSection, FootnoteMarker, Callout/Highlight
+                            (content-decomposition primitives), Lesson* (Learning content)
+    data/                  curated content (glossary, references, tools, real-world, learning)
     lib/                    API client, formatting, aperture-mark geometry, URL-state helpers
     hooks/                   data-fetching + motion hooks
 tests/
   test_api.py                    Live /portfolio/returns end-to-end checks (no mocking)
   test_api_analysis.py            Live /api/analysis, /api/tickers, /api/sample checks
   test_data_integration.py         Live Phase 1 data-layer checks (no mocking)
-  test_models_*.py                  Phase 2 model tests (synthetic, offline)
-  test_models_integration.py         Live Phase 1 -> Phase 2 end-to-end check
+  test_interpretation.py            Interpretation & Key Takeaways logic (Phase 10k)
+  test_models_*.py                    Phase 2 model tests (synthetic, offline)
+  test_models_integration.py           Live Phase 1 -> Phase 2 end-to-end check
 ```
+
+## Status
+
+All core phases (quant models, live data integration, the React/Tailwind/
+shadcn frontend, the Interpretation & Key Takeaways section, the
+institutional visual refinement, and a full independent QA sign-off) are
+done — see [`docs/roadmap.md`](docs/roadmap.md) for the phase-by-phase
+history. QA's independent verdict (Phase 10j,
+[full report](docs/status/2026-08-12-phase10j-qa-signoff.md)): **ready**,
+nothing blocking. Public deployment (default platform: Railway) is the
+one remaining phase, gated on an explicit go-ahead before provisioning
+any hosting resource.
 
 ## Decision log
 
 Every methodology and architecture choice — why HAC standard errors, why
 long-only optimization, why React/Tailwind/shadcn over the original
-server-rendered stack, the GSAP-vs-Framer-Motion call, the deployment
-shape — is logged in [`docs/decisions/`](docs/decisions/). See
-[`docs/roadmap.md`](docs/roadmap.md) for the full phase history.
+server-rendered stack, the GSAP-vs-Framer-Motion call, the Interpretation
+content rules, the institutional-register research, the deployment
+shape — is logged in [`docs/decisions/`](docs/decisions/) (0002 through
+0022 as of this writing). See [`docs/roadmap.md`](docs/roadmap.md) for the
+full phase history.
