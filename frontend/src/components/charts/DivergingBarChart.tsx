@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { fmtNum, fmtPvalue } from "@/lib/format"
+import { fmtNum, pvalueLabel } from "@/lib/format"
 
 export interface DivergingBarRow {
   name: string
@@ -57,7 +57,7 @@ export function DivergingBarChart({ rows, valueFormat, showCI = true }: Divergin
                     <span className="tabular">{valueFormat(row.value)}</span>
                     {row.stdError !== undefined ? (
                       <span className="text-muted-foreground tabular text-[11px]">
-                        SE {fmtNum(row.stdError, 4)} · t={fmtNum(row.tStat, 2)} · p={fmtPvalue(row.pValue ?? 1)}
+                        SE {fmtNum(row.stdError, 4)} · t={fmtNum(row.tStat, 2)} · {pvalueLabel(row.pValue ?? 1)}
                       </span>
                     ) : null}
                     {row.ciLower !== undefined ? (

@@ -29,6 +29,12 @@ export function fmtPvalue(p: number): string {
   return p.toFixed(3)
 }
 
+/** "p<0.001" / "p=0.023" — use in place of a literal "p=" prefix, which
+ * produces the wrong "p=<0.001" reading once fmtPvalue's own "<" kicks in. */
+export function pvalueLabel(p: number): string {
+  return `p${p < 0.001 ? "<" : "="}${fmtPvalue(p)}`
+}
+
 export function significanceNote(p: number): string {
   return p < 0.05 ? "significant at 95% (p<0.05)" : "not significant at 95% (p≥0.05)"
 }

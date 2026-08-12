@@ -15,7 +15,7 @@ import { TableViewTwin } from "@/components/TableViewTwin"
 import { RevealSection } from "@/components/RevealSection"
 import { useAnalysis } from "@/hooks/use-analysis"
 import { parseResultsSearchParams, resultsConfigToRequestBody } from "@/lib/query"
-import { factorLabel, fmtBps, fmtNum, fmtPct, fmtPvalue, fmtRatio, significanceNote } from "@/lib/format"
+import { factorLabel, fmtBps, fmtNum, fmtPct, fmtPvalue, fmtRatio, pvalueLabel, significanceNote } from "@/lib/format"
 import { AlertTriangle, ArrowRight, Copy, Info, Printer } from "lucide-react"
 
 export function Results() {
@@ -184,13 +184,13 @@ export function Results() {
                 value={fmtNum(capm.beta.estimate, 2)}
                 numericValue={capm.beta.estimate}
                 format={(n) => fmtNum(n, 2)}
-                sub={`95% CI [${fmtNum(capm.beta.ci_lower_95, 2)}, ${fmtNum(capm.beta.ci_upper_95, 2)}] · t=${fmtNum(capm.beta.t_stat, 2)}, p=${fmtPvalue(capm.beta.p_value)}`}
+                sub={`95% CI [${fmtNum(capm.beta.ci_lower_95, 2)}, ${fmtNum(capm.beta.ci_upper_95, 2)}] · t=${fmtNum(capm.beta.t_stat, 2)}, ${pvalueLabel(capm.beta.p_value)}`}
                 source={`OpenBB (${meta.equity_provider})`}
               />
               <StatTile
                 label="CAPM alpha (annualized)"
                 value={fmtPct(capm.alpha_annualized, 2, true)}
-                sub={`periodic t=${fmtNum(capm.alpha.t_stat, 2)}, p=${fmtPvalue(capm.alpha.p_value)} (${significanceNote(capm.alpha.p_value)})`}
+                sub={`periodic t=${fmtNum(capm.alpha.t_stat, 2)}, ${pvalueLabel(capm.alpha.p_value)} (${significanceNote(capm.alpha.p_value)})`}
               />
               <StatTile label="CAPM R²" value={fmtPct(capm.r_squared, 1)} sub={`n=${capm.n_obs} ${capm.frequency} obs`} />
             </StatRow>
@@ -224,7 +224,7 @@ export function Results() {
                 sub={`adj. ${fmtPct(ff.adj_r_squared, 1)}`}
                 source="Kenneth French Data Library"
               />
-              <StatTile label="F-statistic" value={fmtNum(ff.f_statistic, 1)} sub={`p=${fmtPvalue(ff.f_p_value)}, n=${ff.n_obs} ${ff.frequency} obs`} />
+              <StatTile label="F-statistic" value={fmtNum(ff.f_statistic, 1)} sub={`${pvalueLabel(ff.f_p_value)}, n=${ff.n_obs} ${ff.frequency} obs`} />
             </StatRow>
           </CardContent>
         </Card>
@@ -238,8 +238,9 @@ export function Results() {
           <CardHeader>
             <CardTitle>Your portfolio vs. the modeled efficient frontier</CardTitle>
             <p className="text-muted-foreground text-[13px]">
-              Long-only Markowitz frontier ({ef.n_obs} {ef.frequency} obs across {ef.symbols.length} holdings). This
-              shows where your as-entered portfolio sits — it is not a rebalancing recommendation.
+              Long-only Markowitz frontier ({ef.n_obs} {ef.frequency} obs across {ef.symbols.length}{" "}
+              {ef.symbols.length === 1 ? "holding" : "holdings"}). This shows where your as-entered portfolio sits —
+              it is not a rebalancing recommendation.
             </p>
           </CardHeader>
           <CardContent>

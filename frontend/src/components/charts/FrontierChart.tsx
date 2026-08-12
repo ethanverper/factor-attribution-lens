@@ -152,21 +152,29 @@ export function FrontierChart({ frontier, current, gmv, maxSharpe }: FrontierCha
           animationDuration={700}
           name="Efficient frontier"
         />
-        {markers.map((m) => (
-          <Scatter
-            key={m.key}
-            data={[{ ...m.point, __label: m.label }]}
-            fill={m.isCurrent ? "var(--primary)" : "var(--muted-foreground)"}
-            shape={(props: unknown) => (
-              <MarkerShape
-                {...(props as DotProps & { cx: number; cy: number })}
-                isCurrent={!!m.isCurrent}
-                showLabel={primaryOf.get(m.key) ?? true}
-                label={mergedLabel(m)}
-              />
-            )}
-          />
-        ))}
+        {markers.map((m) => {
+          // A label anchored to the right of its point overflows a narrow
+          // container (e.g. the Overview hero's compact chart) once the
+          // point itself sits in the right portion of the plotted domain —
+          // flip the anchor to the left there instead of clipping.
+          const volFrac = xDomain[1] > xDomain[0] ? (m.point.volatility - xDomain[0]) / (xDomain[1] - xDomain[0]) : 0
+          return (
+            <Scatter
+              key={m.key}
+              data={[{ ...m.point, __label: m.label }]}
+              fill={m.isCurrent ? "var(--primary)" : "var(--muted-foreground)"}
+              shape={(props: unknown) => (
+                <MarkerShape
+                  {...(props as DotProps & { cx: number; cy: number })}
+                  isCurrent={!!m.isCurrent}
+                  showLabel={primaryOf.get(m.key) ?? true}
+                  label={mergedLabel(m)}
+                  flip={volFrac > 0.72}
+                />
+              )}
+            />
+          )
+        })}
       </ComposedChart>
     </ChartContainer>
   )
@@ -178,12 +186,14 @@ function MarkerShape({
   isCurrent,
   showLabel,
   label,
+  flip,
 }: {
   cx: number
   cy: number
   isCurrent: boolean
   showLabel: boolean
   label: string
+  flip: boolean
 }) {
   if (isCurrent) {
     const { outerR, midR, coreR, outerStroke, midStroke } = apertureRings(18, 1.6)
@@ -194,7 +204,15 @@ function MarkerShape({
         <circle cx={cx} cy={cy} r={midR} fill="none" stroke="var(--primary)" strokeWidth={midStroke} />
         <circle cx={cx} cy={cy} r={coreR} fill="var(--primary)" />
         {showLabel && (
-          <text x={cx + 14} y={cy + 4} fontSize={11.5} fontWeight={600} fill="var(--foreground)" className="tabular">
+          <text
+            x={flip ? cx - 14 : cx + 14}
+            y={cy + 4}
+            textAnchor={flip ? "end" : "start"}
+            fontSize={11.5}
+            fontWeight={600}
+            fill="var(--foreground)"
+            className="tabular"
+          >
             {label}
           </text>
         )}
@@ -205,7 +223,14 @@ function MarkerShape({
     <g>
       <circle cx={cx} cy={cy} r={4.5} fill="var(--muted-foreground)" stroke="var(--card)" strokeWidth={1.5} />
       {showLabel && (
-        <text x={cx + 10} y={cy - 8} fontSize={11} fill="var(--muted-foreground)" className="tabular">
+        <text
+          x={flip ? cx - 10 : cx + 10}
+          y={cy - 8}
+          textAnchor={flip ? "end" : "start"}
+          fontSize={11}
+          fill="var(--muted-foreground)"
+          className="tabular"
+        >
           {label}
         </text>
       )}
