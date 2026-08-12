@@ -3,66 +3,56 @@
 A transparent factor-attribution and portfolio-optimization tool for retail
 investors and small RIAs: enter your holdings and get CAPM beta, Fama-French
 factor loadings, and Markowitz efficient-frontier positioning — computed from
-live market data, with plain-language explanations, not a black-box score.
+live market data, with plain-language explanations and full statistical
+diagnostics, not a black-box score.
 
-This repository currently implements **Phase 1: Foundation & Data
-Integration** (the live data backbone), **Phase 2: Quant Core** (CAPM,
-Fama-French, and Markowitz modeling), **Phase 3: Explainable Attribution &
-Visualization Layer** (a server-rendered dashboard), **Phase 7: UI/UX
-Overhaul & Constrained Inputs** (a full sidebar app shell across all eight
-`docs/project-standards.md` sections, and a constrained ticker/benchmark
-combobox in place of free text), and **Phase 8: References, Formulas &
-Results Review** (the rendered References & Formulas section, with sources).
-It does not yet have the plain-language Learning/Glossary content or the
-Real World/Corporate Applications section — those are clearly marked
-"coming soon" in the running app and are Phase 9.
+**Live demo, dev mode, and deployment**: see [Running it](#running-it) below.
+This is internal decision-support analytics only — no personalized
+investment advice, no trade execution, no custody of funds.
 
-## What this phase does
+## Architecture
 
-Given a portfolio (holdings + weights, a benchmark, a date range, and a
-Fama-French factor model choice), the API fetches and returns a fully
-date-aligned bundle of return series:
+Two parts, one deployable service:
 
-- **Equity returns** — per-holding daily or monthly total returns.
-- **Benchmark returns** — same, for a chosen index (default S&P 500,
-  `^GSPC`).
-- **Portfolio returns** — the weighted-average return series across
-  holdings.
-- **Fama-French factor returns** — 3-factor (Mkt-RF, SMB, HML) or 5-factor
-  (adds RMW, CMA), plus the risk-free rate.
+- **`app/`** — a Python/FastAPI JSON API. `app/data/` integrates live market
+  data (OpenBB/`yfinance` for equity and benchmark prices, Kenneth French's
+  Data Library for Fama-French factor series). `app/models/` is the quant
+  core — CAPM, Fama-French 3-/5-factor regression (Newey-West HAC standard
+  errors), and a long-only Markowitz efficient frontier (SciPy SLSQP, with
+  eigenvalue-clipping covariance regularization for near-singular inputs).
+  `app/api/` exposes the curated ticker/benchmark universe and the full
+  analysis pipeline as JSON.
+- **`frontend/`** — a React (Vite + TypeScript) + Tailwind CSS + shadcn/ui
+  single-page app. Eight real routes (`/`, `/inputs`, `/results`,
+  `/learning`, `/glossary`, `/tools`, `/references`, `/real-world`),
+  Recharts-based data visualization (factor-loading bars with CI whiskers,
+  the efficient frontier), GSAP-driven interaction (route transitions,
+  data-reveal animations, scroll-triggered Learning diagrams), and full
+  light/dark mode + mobile support.
 
-All four series are aligned to their common trading dates so the response is
-immediately usable for regression — no NaNs, no mismatched calendars.
+In production, FastAPI serves the frontend's built static assets directly
+(`app/main.py`'s `StaticFiles` mount + SPA catch-all route), so the whole
+app is one process, not two separate services — see
+[`docs/decisions/0018-phase10i-react-rebuild.md`](docs/decisions/0018-phase10i-react-rebuild.md).
 
-## Stack
+The frontend replaced an earlier server-rendered/hand-drawn-SVG dashboard
+(`app/dashboard/`, Phases 3–10h) per the team's default frontend stack
+decision — see
+[`docs/decisions/0004-react-tailwind-shadcn-default-frontend.md`](../../../../docs/decisions/0004-react-tailwind-shadcn-default-frontend.md)
+(Cowork OS root) and
+[`docs/decisions/0017-phase10h-identity-for-react-stack.md`](docs/decisions/0017-phase10h-identity-for-react-stack.md).
+`app/models/` and `app/data/` are untouched by that rebuild.
 
-Python 3.11 + FastAPI + Pydantic v2, dependency-managed with
-[`uv`](https://docs.astral.sh/uv/). Data sources:
+## API
 
-- [OpenBB Open Data Platform](https://openbb.co/) (`yfinance` provider, no
-  API key required) for equity and benchmark index prices.
-- [Kenneth French's Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html)
-  via `pandas-datareader` for Fama-French factor return series (OpenBB does
-  not carry this series natively — see
-  [`docs/decisions/0002-phase1-stack-and-data-sourcing.md`](docs/decisions/0002-phase1-stack-and-data-sourcing.md)).
-
-## Running it
-
-```bash
-uv sync
-uv run uvicorn app.main:app --reload --reload-dir app
-```
-
-`--reload-dir app` scopes the watcher to this project's own source tree.
-Without it, `--reload` watches the entire project root by default —
-including `.venv/`, which holds thousands of dependency files (pandas,
-numpy, etc.) — causing constant spurious reloads triggered by unrelated
-package internals, not actual code changes.
-
-Then, for example:
+`POST /api/analysis` — the primary endpoint: given holdings (symbol +
+fractional weight), a benchmark, a date range, a Fama-French model choice
+(`"3"`/`"5"`), and a frequency (`"daily"`/`"monthly"`), runs the full live
+pipeline and returns CAPM/Fama-French/Markowitz results plus return/risk
+attribution as one JSON bundle.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/portfolio/returns \
+curl -X POST http://127.0.0.1:8000/api/analysis \
   -H "Content-Type: application/json" \
   -d '{
     "holdings": [
@@ -78,247 +68,124 @@ curl -X POST http://127.0.0.1:8000/portfolio/returns \
   }'
 ```
 
-`GET /health` is available for a quick liveness check.
+`GET /api/tickers` — the curated ~496-symbol S&P 500 + 6-benchmark universe
+the frontend's selection controls search over (see
+[`docs/decisions/0005-phase7-ticker-universe.md`](docs/decisions/0005-phase7-ticker-universe.md)).
+`GET /api/sample` — the fixed sample-portfolio quick-start default
+(AAPL/MSFT/GOOGL/AMZN vs. S&P 500). `POST /portfolio/returns` (Phase 1,
+unchanged) returns the raw aligned return-series bundle without running any
+model — the lower-level building block `POST /api/analysis` is built on.
+`GET /health` is a liveness check.
 
-## Response shape
+Holdings/benchmark symbols are re-validated against the curated universe
+server-side (400 on an invalid symbol) regardless of what the frontend
+sends — defense in depth against a request that bypasses the browser.
 
-```jsonc
-{
-  "meta": {
-    "holdings": [...], "benchmark": "^GSPC", "factor_model": "3", "frequency": "daily",
-    "requested_start_date": "2026-06-01", "requested_end_date": "2026-08-09",
-    "aligned_start_date": "2026-06-02", "aligned_end_date": "2026-06-30", // bounded by the most-stale source series
-    "n_periods": 20,
-    "equity_provider": "yfinance (via OpenBB Open Data Platform)",
-    "factor_provider": "Kenneth French Data Library (via pandas-datareader)"
-  },
-  "equity_returns": { "AAPL": [{"date": "2026-06-02", "value": 0.0123}, ...], "MSFT": [...] },
-  "portfolio_returns": [{"date": "2026-06-02", "value": 0.0091}, ...],
-  "benchmark_returns": [{"date": "2026-06-02", "value": 0.0087}, ...],
-  "factor_returns": [{"date": "2026-06-02", "mkt_rf": 0.0082, "smb": -0.0011, "hml": 0.0034, "rmw": null, "cma": null, "rf": 0.0001}, ...]
-}
+## Running it
+
+Backend:
+
+```bash
+uv sync
+uv run uvicorn app.main:app --port 8000
 ```
 
-All returns are simple period-over-period percentage changes expressed as
-decimal fractions (e.g. `0.01` = 1%), including the Fama-French series
-(French's raw files are in percent; this API divides by 100 for
-consistency). Equity/benchmark prices are fetched with dividends included, so
-returns are total returns — consistent with how the Fama-French factors
-themselves are constructed.
+Frontend (separate terminal, dev mode — proxies `/api/*` to the backend on
+`:8000` via `frontend/vite.config.ts`):
 
-`aligned_start_date`/`aligned_end_date` reflect the actual usable date range
-after intersecting all four series' trading calendars — this is very likely
-narrower than the requested range, since Kenneth French's library updates on
-its own lag (weeks behind live equity prices). Always read these fields
-rather than assuming the request's `start_date`/`end_date` were fully
-honored.
-
-## Phase 2: Quant Core (`app/models/`)
-
-Given a `PortfolioReturnData` bundle (whatever `POST /portfolio/returns`
-returns, live or hand-built), `app/models/analysis.py` runs all three
-models and returns one bundled result:
-
-```python
-from app.models.analysis import analyze_portfolio
-from app.service import build_portfolio_return_data
-
-bundle = build_portfolio_return_data(request)   # Phase 1
-analysis = analyze_portfolio(bundle)             # Phase 2
-
-analysis.capm.beta.estimate                      # CAPM beta vs. the benchmark
-analysis.factor_model.factor_loadings             # Fama-French loadings + t-stats/SEs/p-values
-analysis.efficient_frontier.frontier              # frontier coordinates (return, vol, weights)
-analysis.efficient_frontier.current_portfolio     # where the input portfolio sits vs. the frontier
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-The individual model functions (`capm.estimate_capm_beta`,
-`fama_french.estimate_factor_model`,
-`optimization.compute_efficient_frontier`) are also public and independently
-usable/testable on plain pandas Series/DataFrames, without needing a
-`PortfolioReturnData` object.
+Open the Vite dev server's printed URL (typically `http://localhost:5173`).
 
-Key methodology choices (regression standard-error convention, long-only
-optimization by default, covariance regularization, annualization
-conventions) are logged in
-[`docs/decisions/0003-phase2-quant-methodology.md`](docs/decisions/0003-phase2-quant-methodology.md).
+**Single-process / production shape**: build the frontend once, then the
+backend serves it directly on its own port with no separate frontend
+process:
 
-This is internal decision-support analytics only — `PortfolioAnalysis`
-output (including frontier/Sharpe-ratio comparisons) is not, and must not
-be presented as, personalized investment advice or a buy/sell/rebalance
-recommendation.
-
-## Phase 3: Attribution & Visualization Dashboard (`app/dashboard/`)
-
-A server-rendered HTML dashboard reached from inside the running FastAPI
-app — no separate frontend, no client-side charting library:
-
-- **`GET /`** — a holdings-entry form (tickers + weights, benchmark, date
-  range, Fama-French model, frequency).
-- **`POST /dashboard`** — builds the exact same `PortfolioRequest` Phase
-  1's `POST /portfolio/returns` uses, runs it through
-  `build_portfolio_return_data` -> `analyze_portfolio` (live data, no
-  mocking), and renders three views from the live result:
-  1. **Factor exposure** — CAPM beta and Fama-French factor loadings as a
-     diverging bar chart, with 95% CI whiskers plotted directly on the
-     chart (not hidden behind a hover) plus t-stats/p-values/R² visible in
-     stat tiles and a table-view twin.
-  2. **Efficient frontier** — the modeled long-only frontier curve with the
-     current portfolio, global-min-variance, and max-Sharpe points plotted
-     on it, and the return gap at matched volatility labeled directly on
-     the chart. Surfaces a visible warning banner if
-     `covariance_regularized` was triggered (per decision 0003).
-  3. **Return & risk attribution** — a diverging bar chart of alpha plus
-     each factor's own contribution to the portfolio's realized mean
-     per-period excess return (an exact OLS identity, not an
-     approximation — see `app/dashboard/attribution.py`), and a
-     part-to-whole split of return variance into factor-explained (R²) vs.
-     idiosyncratic.
-
-Every chart follows the `dataviz` skill's method (validated categorical
-palette, fixed mark specs, hover tooltips, a `<details>` table-view twin
-on every chart, light/dark mode). Design choices — why server-side SVG
-instead of a JS charting library, why no Jinja2, why return/risk
-attribution lives in the dashboard layer rather than as a new Phase 2
-model output — are logged in
-[`docs/decisions/0004-phase3-dashboard-architecture.md`](docs/decisions/0004-phase3-dashboard-architecture.md).
-
-This is internal decision-support analytics, same limit as Phase 2: no
-personalized investment advice, no buy/sell/rebalance signal. The
-dashboard's disclaimer banner and section copy say so explicitly.
-
-## Phase 7: UI/UX Overhaul & Constrained Inputs (`app/dashboard/shell.py`, `app/dashboard/tickers.py`)
-
-Both `GET /` and `POST /dashboard` now render one persistent app shell — a
-sidebar table-of-contents nav across all eight `docs/project-standards.md`
-sections (Overview, Inputs, Results, Learning, Glossary, Tools &
-Technologies, References & Formulas, Real World/Corporate Applications) —
-instead of two disconnected pages. Overview/Inputs/Results/Tools &
-Technologies/References & Formulas are fully built; Learning/Glossary/Real
-World remain clearly-marked placeholder panels for Phase 9 (`educator`) to
-fill in. Phase 3's charts
-(`viz.py`, `attribution.py`) are unchanged — only re-homed into the Results
-panel and restyled to the new visual system (Fraunces display serif + IBM
-Plex Sans/Mono, reusing the existing validated chart palette's
-`--series-2` as the one signature page accent).
-
-The holdings and benchmark fields are no longer free text: they're a
-hand-built accessible combobox backed by a curated ~496-symbol S&P 500
-universe (`app/dashboard/tickers.py`) plus a 6-item benchmark list. The
-value that actually gets submitted only ever comes from selecting a real
-option — never from raw typed text — and `app/dashboard/routes.py`
-independently re-validates every submitted symbol server-side as a
-backstop against a non-browser submission. See
-[`docs/decisions/0005-phase7-ticker-universe.md`](docs/decisions/0005-phase7-ticker-universe.md)
-for why this universe, how it's sourced, and its known limitations (it's a
-static snapshot, not a live index-membership feed).
-
-## Phase 8: References, Formulas & Results Review (`app/dashboard/shell.py`)
-
-The References & Formulas tab (`render_references_section()`) documents the
-exact math each model actually computes — CAPM, Fama-French 3-/5-factor,
-Newey-West HAC regression diagnostics, the Markowitz long-only efficient
-frontier, and the return/risk attribution identity — one card per module,
-each with what it computes, the real notation (rendered inline, `<sub>`/
-`<sup>`, no external math-typesetting library, consistent with Phase 3's
-"no client-side library" convention), and a primary-source citation
-(Sharpe 1964; Fama & French 1993/2015; Newey & West 1987/1994; Markowitz
-1952). This documents this project's actual implementation choices (HAC
-standard errors, long-only frontier with eigenvalue-clipping
-regularization) rather than a generic textbook version — see
-[`docs/decisions/0006-phase8-references-formulas-and-results-review.md`](docs/decisions/0006-phase8-references-formulas-and-results-review.md)
-for the notation/citation convention.
-
-This phase also reviewed the Results tab for regressions introduced by
-Phase 7's restyling — ran the same AAPL/MSFT/GOOGL portfolio directly
-against the model code and through the live dashboard, and confirmed every
-displayed number matches exactly; no regressions found, nothing fixed. The
-pre-existing frontier-chart label-overlap issue Phase 7 flagged was
-confirmed still present (not fixed — out of this phase's scope, flagged
-for Phase 10 QA).
+```bash
+cd frontend && npm install && npm run build && cd ..
+uv run uvicorn app.main:app --port 8000
+# http://localhost:8000 now serves the full app (API + built UI)
+```
 
 ## Development
 
 ```bash
-uv sync                                            # installs runtime + dev (pytest) dependencies
-uv run pytest -v                                   # runs the full test suite
-uv run uvicorn app.main:app --reload --reload-dir app   # dev server, scoped file watcher
+uv sync
+uv run pytest -v          # backend test suite (see tests/ below)
+uv run ruff check .        # backend lint
+
+cd frontend
+npm install
+npx tsc -b                 # typecheck
+npm run build               # production build
+npm run lint                 # oxlint
 ```
 
-Phase 1's data-layer/API tests make real network calls against OpenBB and
-Kenneth French's Data Library — no mocked fixture data. Phase 2's model
-tests (`test_models_capm.py`, `test_models_fama_french.py`,
-`test_models_optimization.py`, `test_models_analysis.py`,
-`test_models_adapters.py`) are synthetic/offline — they validate the math
-against known data-generating processes (e.g. simulate returns from a
-chosen true beta, check the regression recovers it), since there's no
-single external "reference value" for a live-data regression the way
-there is for, say, a known options price. `test_models_integration.py` is
-the one live exception: it chains the real Phase 1 endpoint through Phase
-2's `analyze_portfolio` and checks the combined output is plausible
-(weights sum to 1, beta/R² in sane ranges) end-to-end. `test_dashboard.py`
-follows the same live-data convention for Phase 3: it drives `GET /` and
-`POST /dashboard` through a real `TestClient` request (live market data,
-no mocking) and separately asserts the return-attribution decomposition's
-numeric identity (contributions sum to the realized mean excess return)
-holds against live data, not just synthetic fixtures.
+Backend data-layer/API tests (`test_api.py`, `test_api_analysis.py`,
+`test_data_integration.py`, `test_models_integration.py`) make real network
+calls against OpenBB and Kenneth French's Data Library — no mocked fixture
+data. The remaining `test_models_*.py` tests are synthetic/offline: they
+validate the math against known data-generating processes (e.g. simulate
+returns from a chosen true beta, check the regression recovers it), since
+there's no single external "reference value" for a live-data regression the
+way there is for, say, a known options price.
 
 Note: `openbb`'s first-ever import triggers a one-time build of its static
 API-tree files (cached to disk after that), which can take on the order of
-tens of seconds depending on disk speed; every subsequent process start —
-`uv run pytest`, `uv run uvicorn app.main:app` — is fast (steady-state
-`openbb` import well under a second). Only `openbb-core`, `openbb-equity`,
-and `openbb-yfinance` are installed (not the full `openbb` meta-package),
-since the app only ever calls `obb.equity.price.historical` via the
-`yfinance` provider — see
+tens of seconds depending on disk speed; every subsequent process start is
+fast. Only `openbb-core`, `openbb-equity`, and `openbb-yfinance` are
+installed (not the full `openbb` meta-package), since the app only ever
+calls `obb.equity.price.historical` via the `yfinance` provider — see
 [`docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md`](docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md).
 
 ## Project layout
 
 ```
 app/
-  main.py        FastAPI app and routes (includes app/dashboard's router)
-  schemas.py      Pydantic request/response models (the Phase 2 hand-off contract)
-  service.py      Orchestrates fetch -> align -> respond
-  data/
-    equity.py     OpenBB equity price fetch + return computation
-    benchmark.py  Benchmark index returns (thin wrapper over equity.py)
-    factors.py    Fama-French factor returns via pandas-datareader
-    portfolio.py  Weighted portfolio returns + cross-series date alignment
-  models/                Phase 2 quant core
-    schemas.py           Pydantic output models (Phase 3/4 hand-off contract)
-    adapters.py          PortfolioReturnData -> pandas
-    _regression.py       shared OLS/HAC helper (capm.py + fama_french.py)
-    capm.py              CAPM beta estimation
-    fama_french.py       Fama-French 3-/5-factor regression + diagnostics
-    covariance.py        covariance estimation + eigenvalue-clipping regularization
-    optimization.py      Markowitz efficient frontier + current-portfolio positioning
-    analysis.py          orchestrator: analyze_portfolio(bundle) -> PortfolioAnalysis
-  dashboard/             Phase 3 attribution & visualization layer + Phase 7 app shell
-    routes.py            GET / (form), POST /dashboard (live-data results page)
-    attribution.py       return/risk attribution derived from Phase 2 output
-    viz.py               SVG chart components (dataviz-skill palette/marks/interaction)
-    pages.py             per-page panel assembly (Inputs, Results + Phase 3 chart sections)
-    shell.py             Phase 7 app shell: sidebar nav, tab panels, ticker/benchmark combobox
-    tickers.py           Phase 7 curated S&P 500 + benchmark universe (constrained-input data)
+  main.py            FastAPI app: API routes + (in production) serves frontend/dist/
+  schemas.py         Pydantic request/response models (the Phase 1/2 hand-off contract)
+  service.py         Orchestrates fetch -> align -> respond
+  data/               Live market-data integration (untouched by the Phase 10i rebuild)
+    equity.py          OpenBB equity price fetch + return computation
+    benchmark.py        Benchmark index returns (thin wrapper over equity.py)
+    factors.py           Fama-French factor returns via pandas-datareader
+    portfolio.py           Weighted portfolio returns + cross-series date alignment
+  models/             Quant core (untouched by the Phase 10i rebuild)
+    schemas.py          Pydantic output models
+    adapters.py           PortfolioReturnData -> pandas
+    _regression.py          shared OLS/HAC helper (capm.py + fama_french.py)
+    capm.py                   CAPM beta estimation
+    fama_french.py             Fama-French 3-/5-factor regression + diagnostics
+    covariance.py                covariance estimation + eigenvalue-clipping regularization
+    optimization.py               Markowitz efficient frontier + current-portfolio positioning
+    analysis.py                    orchestrator: analyze_portfolio(bundle) -> PortfolioAnalysis
+  api/                Pure JSON API for the React frontend (Phase 10i)
+    routes.py           GET /api/tickers, GET /api/sample, POST /api/analysis
+    attribution.py        return/risk attribution derived from Phase 2 output
+    tickers.py              curated S&P 500 + benchmark universe (constrained-input data)
+frontend/            React (Vite + TypeScript) + Tailwind + shadcn/ui SPA (Phase 10i)
+  src/
+    pages/              one component per section/route
+    components/          shared UI (sidebar, charts, diagrams, ApertureMark, ...)
+    data/                  ported static content (glossary, references, tools, real-world)
+    lib/                    API client, formatting, aperture-mark geometry, URL-state helpers
+    hooks/                   data-fetching + motion hooks
 tests/
-  test_data_integration.py    Live Phase 1 data-layer checks (no mocking)
-  test_api.py                 Live Phase 1 end-to-end API checks (no mocking)
-  test_models_*.py            Phase 2 model tests (synthetic, offline)
-  test_models_integration.py  Live Phase 1 -> Phase 2 end-to-end check
-  test_dashboard.py           Live Phase 3 dashboard checks + return-attribution identity check
+  test_api.py                    Live /portfolio/returns end-to-end checks (no mocking)
+  test_api_analysis.py            Live /api/analysis, /api/tickers, /api/sample checks
+  test_data_integration.py         Live Phase 1 data-layer checks (no mocking)
+  test_models_*.py                  Phase 2 model tests (synthetic, offline)
+  test_models_integration.py         Live Phase 1 -> Phase 2 end-to-end check
 ```
 
-## What's next (Phase 9 `educator`)
+## Decision log
 
-Phase 8 hands off a seven-of-eight-section app shell — Overview/Inputs/
-Results/Tools & Technologies/References & Formulas all built —
-with Learning/Glossary/Real World still left as clearly-marked placeholder
-panels (see `app/dashboard/pages.py`'s `_base_panels()` and
-`shell.render_placeholder_section`). Phase 9 builds the dual-register
-Learning content, the Glossary, and the Real World/Corporate Applications
-section — it can cross-link to `§07 References & Formulas` for the
-underlying math rather than re-deriving it there — see
-[`docs/decisions/0004-phase3-dashboard-architecture.md`](docs/decisions/0004-phase3-dashboard-architecture.md)
-for return-attribution unit conventions (per-period, not annualized) and
-[`docs/roadmap.md`](docs/roadmap.md) for the full phase plan.
+Every methodology and architecture choice — why HAC standard errors, why
+long-only optimization, why React/Tailwind/shadcn over the original
+server-rendered stack, the GSAP-vs-Framer-Motion call, the deployment
+shape — is logged in [`docs/decisions/`](docs/decisions/). See
+[`docs/roadmap.md`](docs/roadmap.md) for the full phase history.
