@@ -1,22 +1,23 @@
-"""Curated ticker universe for the Phase 7 constrained holdings/benchmark inputs.
+"""Curated ticker universe for the constrained holdings/benchmark inputs.
 
 Per `docs/project-standards.md` rule 2 ("no open free-text for anything that
 must be valid/exact data") and `docs/decisions/0005-phase7-ticker-universe.md`,
-the holdings form no longer accepts an arbitrary typed ticker -- it offers a
-searchable selection control constrained to this list. Rather than trying to
-validate against every ticker that could ever exist, the universe is a
-curated, well-known large-cap set: the S&P 500 constituents (sourced from a
-public constituents dataset mirroring the official list; see the decision
-doc for provenance and refresh policy), normalized to Yahoo Finance /
-`yfinance` ticker conventions (share-class dots become dashes, e.g.
-`BRK.B` -> `BRK-B`) so every entry here is directly usable by the existing
-Phase 1 `app.data.equity` fetch path unmodified.
+holdings/benchmark entry is never an arbitrary typed ticker -- the React
+frontend's `Combobox`/`Select` (Phase 10i) is constrained to this list,
+served as JSON via `GET /api/tickers`. Rather than trying to validate against
+every ticker that could ever exist, the universe is a curated, well-known
+large-cap set: the S&P 500 constituents (sourced from a public constituents
+dataset mirroring the official list; see the decision doc for provenance and
+refresh policy), normalized to Yahoo Finance / `yfinance` ticker conventions
+(share-class dots become dashes, e.g. `BRK.B` -> `BRK-B`) so every entry here
+is directly usable by the existing Phase 1 `app.data.equity` fetch path
+unmodified.
 
 This module is presentation/validation-layer data only -- it does not touch
-`app/schemas.py`'s Phase 1 contract. `app/dashboard/routes.py` validates
-submitted holdings/benchmark symbols against it as a server-side backstop
-(the combobox UI is the primary constraint; this is defense in depth against
-a submission that bypasses the browser).
+`app/schemas.py`'s Phase 1 contract. `app/api/routes.py` validates submitted
+holdings/benchmark symbols against it as a server-side backstop (the
+frontend's combobox is the primary constraint; this is defense in depth
+against a submission that bypasses the browser).
 """
 from __future__ import annotations
 
