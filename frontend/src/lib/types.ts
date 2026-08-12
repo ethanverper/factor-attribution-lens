@@ -129,7 +129,8 @@ export interface RiskAttribution {
 export interface InterpretationTakeaway {
   id: "beta" | "style_tilt" | "explanatory_power" | "frontier_position"
   title: string
-  body: string
+  lead: string
+  bullets: string[]
   is_headline: boolean
 }
 

@@ -1,4 +1,5 @@
 import { AlertTriangle, Info } from "lucide-react"
+import { LessonList } from "@/components/LessonList"
 import type { Interpretation, InterpretationTakeaway } from "@/lib/types"
 
 const TAKEAWAY_NUMBER: Record<InterpretationTakeaway["id"], string> = {
@@ -62,7 +63,8 @@ export function InterpretationSection({ interpretation }: { interpretation: Inte
                 <span className="text-primary font-mono text-[9.5px] tracking-wide uppercase">Headline finding</span>
               ) : null}
             </div>
-            <p className="text-muted-foreground text-[13px] leading-relaxed">{t.body}</p>
+            <p className="text-muted-foreground text-[13px] leading-relaxed">{t.lead}</p>
+            {t.bullets.length ? <LessonList items={t.bullets} /> : null}
           </div>
         ))}
       </div>

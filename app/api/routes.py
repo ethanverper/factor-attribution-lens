@@ -150,7 +150,7 @@ def post_analysis(request: PortfolioRequest) -> AnalysisResponse:
         interpretation=InterpretationResponse(
             headline=interpretation.headline,
             takeaways=[
-                InterpretationTakeaway(id=t.id, title=t.title, body=t.body, is_headline=t.is_headline)
+                InterpretationTakeaway(id=t.id, title=t.title, lead=t.lead, bullets=t.bullets, is_headline=t.is_headline)
                 for t in interpretation.takeaways
             ],
             flags=[InterpretationFlag(id=f.id, severity=f.severity, message=f.message) for f in interpretation.flags],

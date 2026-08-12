@@ -37,7 +37,8 @@ class RiskAttributionResponse(BaseModel):
 class InterpretationTakeaway(BaseModel):
     id: Literal["beta", "style_tilt", "explanatory_power", "frontier_position"]
     title: str
-    body: str
+    lead: str
+    bullets: list[str]
     is_headline: bool
 
 

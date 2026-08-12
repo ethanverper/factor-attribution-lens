@@ -73,11 +73,30 @@ FlagId = str  # "covariance_regularized" | "short_data_window"
 
 
 @dataclass(frozen=True)
+class TakeawayBody:
+    """A takeaway's content decomposed into a lead sentence plus supporting
+    bullets (`docs/project-standards.md` rule 15 -- content decomposition,
+    applied here to the section rule 9a itself calls "the most important...a
+    project has", which the rule-15 sweep missed the first time around)."""
+
+    lead: str
+    bullets: list[str]
+
+
+@dataclass(frozen=True)
 class Takeaway:
     id: TakeawayId
     title: str
-    body: str
+    lead: str
+    bullets: list[str]
     is_headline: bool
+
+    @property
+    def body(self) -> str:
+        """Back-compat single-string view (existing test assertions check
+        substrings of this, order-independent) -- the real content lives in
+        `lead`/`bullets` now, which is what the API response and frontend use."""
+        return " ".join([self.lead, *self.bullets])
 
 
 @dataclass(frozen=True)
@@ -122,29 +141,38 @@ def compute_interpretation(analysis: PortfolioAnalysis) -> Interpretation:
         benchmark=capm.benchmark,
     )
 
+    beta_body = _beta_body(beta, capm.benchmark, capm.n_obs, capm.frequency, significant_vs_zero, distinguishable_from_market)
+    style_tilt_body = _style_tilt_body(ff, capm, non_market, significant_loadings)
+    explanatory_power_body = _explanatory_power_body(capm, ff)
+    frontier_position_body = _frontier_position_body(ef, degenerate, gap)
+
     takeaways = [
         Takeaway(
             id="beta",
             title="Market sensitivity (beta)",
-            body=_beta_body(beta, capm.benchmark, capm.n_obs, capm.frequency, significant_vs_zero, distinguishable_from_market),
+            lead=beta_body.lead,
+            bullets=beta_body.bullets,
             is_headline=headline_id == "beta",
         ),
         Takeaway(
             id="style_tilt",
             title="Style tilt",
-            body=_style_tilt_body(ff, capm, non_market, significant_loadings),
+            lead=style_tilt_body.lead,
+            bullets=style_tilt_body.bullets,
             is_headline=headline_id == "style_tilt",
         ),
         Takeaway(
             id="explanatory_power",
             title="Explanatory power",
-            body=_explanatory_power_body(capm, ff),
+            lead=explanatory_power_body.lead,
+            bullets=explanatory_power_body.bullets,
             is_headline=headline_id == "explanatory_power",
         ),
         Takeaway(
             id="frontier_position",
             title="Frontier position",
-            body=_frontier_position_body(ef, degenerate, gap),
+            lead=frontier_position_body.lead,
+            bullets=frontier_position_body.bullets,
             is_headline=headline_id == "frontier_position",
         ),
     ]
@@ -161,8 +189,14 @@ def _significant(coef: RegressionCoefficient) -> bool:
     return coef.ci_lower_95 > 0 or coef.ci_upper_95 < 0
 
 
-def _fmt_p(p: float) -> str:
-    return "<0.001" if p < 0.001 else f"{p:.3f}"
+def _fmt_p_label(p: float) -> str:
+    """"p<0.001" / "p=0.023" -- owns its own operator so callers never
+    prepend a literal "p=" themselves (that produced "p=<0.001" here, the
+    same double-operator bug independently found and fixed in the frontend's
+    `pvalueLabel` -- this is the backend's own instance of it, in the prose
+    `compute_interpretation` generates, not caught by that earlier fix since
+    it lives in a different file)."""
+    return "p<0.001" if p < 0.001 else f"p={p:.3f}"
 
 
 def _is_degenerate(ef: EfficientFrontierResult) -> bool:
@@ -192,48 +226,50 @@ def _beta_body(
     frequency: str,
     significant_vs_zero: bool,
     distinguishable_from_market: bool,
-) -> str:
+) -> TakeawayBody:
     lo, hi, estimate = beta.ci_lower_95, beta.ci_upper_95, beta.estimate
     if not significant_vs_zero:
-        return (
-            f"The 95% confidence interval for beta ([{lo:.2f}, {hi:.2f}]) includes zero — at this window's sample "
-            f"size ({n_obs} {frequency} observations), the data cannot rule out that this portfolio has no "
-            f"reliable linear relationship with {benchmark} at all. Read the point estimate ({estimate:.2f}) as "
-            f"suggestive, not established."
+        return TakeawayBody(
+            lead=(
+                f"The 95% confidence interval for beta ([{lo:.2f}, {hi:.2f}]) includes zero — at this window's "
+                f"sample size ({n_obs} {frequency} observations), the data cannot rule out that this portfolio "
+                f"has no reliable linear relationship with {benchmark} at all."
+            ),
+            bullets=[f"Read the point estimate ({estimate:.2f}) as suggestive, not established."],
         )
 
     width = hi - lo
-    clause1 = (
-        f"Beta is statistically distinguishable from zero (t={beta.t_stat:.2f}, p={_fmt_p(beta.p_value)}) — "
+    lead = (
+        f"Beta is statistically distinguishable from zero (t={beta.t_stat:.2f}, {_fmt_p_label(beta.p_value)}) — "
         f"there is real, measurable co-movement with {benchmark}."
     )
     if width < BETA_CI_WIDTH_TIGHT:
-        clause2 = (
+        precision_bullet = (
             f"The interval is narrow (width {width:.2f}), so {estimate:.2f} is a reasonably precise read of this "
             f"portfolio's market sensitivity over this window."
         )
     elif width >= BETA_CI_WIDTH_WIDE:
-        clause2 = (
+        precision_bullet = (
             f"The interval is wide (width {width:.2f}) relative to the point estimate — {estimate:.2f} is this "
             f"window's best estimate, but the data doesn't pin down market sensitivity tightly; a longer window "
             f"would narrow this."
         )
     else:
-        clause2 = (
+        precision_bullet = (
             f"The interval (width {width:.2f}) is moderate — treat {estimate:.2f} as a reasonable central "
             f"estimate, but true market sensitivity could plausibly sit noticeably higher or lower."
         )
     if distinguishable_from_market:
-        clause3 = (
+        market_bullet = (
             f"It's also statistically distinguishable from beta = 1 — this portfolio's market sensitivity is "
             f"genuinely different from simply holding {benchmark} itself, not just noisier."
         )
     else:
-        clause3 = (
+        market_bullet = (
             f"The interval also includes 1.0, so beta isn't statistically distinguishable from moving in lockstep "
             f"with {benchmark} either."
         )
-    return f"{clause1} {clause2} {clause3}"
+    return TakeawayBody(lead=lead, bullets=[precision_bullet, market_bullet])
 
 
 # --- 3b. style_tilt ---------------------------------------------------------
@@ -241,22 +277,24 @@ def _beta_body(
 
 def _style_tilt_body(
     ff, capm, non_market: list[RegressionCoefficient], significant_loadings: list[RegressionCoefficient]
-) -> str:
+) -> TakeawayBody:
     if not significant_loadings:
         names = ", ".join(FACTOR_LABELS.get(loading.name, loading.name) for loading in non_market)
-        return (
-            f"None of the non-market factors ({names}) are statistically distinguishable from zero at the 95% "
-            f"level. This portfolio's behavior is explained by broad market exposure, not a detectable "
-            f"{_style_words_slash(ff.factor_model)} tilt — whatever style characteristics these holdings have "
-            f"individually, they don't show up as a statistically reliable factor exposure over this window."
+        return TakeawayBody(
+            lead=f"None of the non-market factors ({names}) are statistically distinguishable from zero at the 95% level.",
+            bullets=[
+                f"This portfolio's behavior is explained by broad market exposure, not a detectable "
+                f"{_style_words_slash(ff.factor_model)} tilt — whatever style characteristics these holdings have "
+                f"individually, they don't show up as a statistically reliable factor exposure over this window."
+            ],
         )
 
     ordered = [loading for name in _FACTOR_ORDER for loading in non_market if loading.name == name]
-    clauses = [_factor_clause(loading, loading in significant_loadings) for loading in ordered]
+    per_factor_bullets = [_factor_clause(loading, loading in significant_loadings) for loading in ordered]
 
     sig_ordered = [loading for loading in ordered if loading in significant_loadings]
     if len(sig_ordered) == 1:
-        closing = (
+        lead = (
             f"With only {len(sig_ordered)}/{len(non_market)} non-market factors clearing the 95% bar, "
             f"{_axis_phrase(sig_ordered[0])} is this portfolio's one statistically reliable style signal beyond "
             f"overall market exposure."
@@ -264,17 +302,14 @@ def _style_tilt_body(
     else:
         phrases = ", ".join(_axis_phrase(loading) for loading in sig_ordered[:-1])
         phrases = f"{phrases} and {_axis_phrase(sig_ordered[-1])}" if phrases else _axis_phrase(sig_ordered[-1])
-        closing = (
+        lead = (
             f"With {len(sig_ordered)}/{len(non_market)} non-market factors clearing the 95% bar, {phrases} are "
             f"this portfolio's statistically reliable style signals beyond overall market exposure."
         )
-    clauses.append(closing)
 
     divergence = _mkt_rf_divergence_note(ff, capm)
-    if divergence:
-        clauses.append(divergence)
-
-    return " ".join(clauses)
+    bullets = [*per_factor_bullets, divergence] if divergence else per_factor_bullets
+    return TakeawayBody(lead=lead, bullets=bullets)
 
 
 def _factor_clause(loading: RegressionCoefficient, significant: bool) -> str:
@@ -331,11 +366,11 @@ def _bucket_r2(r2: float) -> str:
     return "very high"
 
 
-def _explanatory_power_body(capm, ff) -> str:
+def _explanatory_power_body(capm, ff) -> TakeawayBody:
     r2 = capm.r_squared
     incremental = ff.r_squared - r2
 
-    clause1 = (
+    lead = (
         f"The single-factor CAPM model explains {r2:.1%} of this portfolio's return variance "
         f"({_bucket_r2(r2)} for an equity portfolio) — the remaining {1 - r2:.1%} is idiosyncratic (stock-specific) "
         f"movement the market factor alone doesn't capture."
@@ -344,13 +379,13 @@ def _explanatory_power_body(capm, ff) -> str:
     style_comma = _style_words_comma(ff.factor_model)
     if incremental >= R2_MATERIAL_LIFT:
         prefix = "a modest absolute lift, but proportionally large: " if r2 < R2_VERY_LOW else ""
-        clause2 = (
+        lift_bullet = (
             f"Adding {style_comma} lifts explained variance to {ff.r_squared:.1%} (adjusted {ff.adj_r_squared:.1%}) "
             f"— {prefix}a real, {incremental:.1%}-point improvement attributable to those style factors, not the "
             f"market alone."
         )
     else:
-        clause2 = (
+        lift_bullet = (
             f"Adding {style_comma} only lifts explained variance to {ff.r_squared:.1%} — a marginal "
             f"{incremental:.1%}-point improvement; most of what these factors could explain, the market factor "
             f"alone already captured."
@@ -360,23 +395,23 @@ def _explanatory_power_body(capm, ff) -> str:
         suffix = (
             ", even where R² itself is low — a genuine but small relationship, not noise" if ff.r_squared < R2_VERY_LOW else ""
         )
-        clause3 = (
-            f"The joint F-test (F={ff.f_statistic:.1f}, p={_fmt_p(ff.f_p_value)}) confirms the factor model as a "
+        f_test_bullet = (
+            f"The joint F-test (F={ff.f_statistic:.1f}, {_fmt_p_label(ff.f_p_value)}) confirms the factor model as a "
             f"whole explains statistically real variance{suffix}."
         )
     else:
-        clause3 = (
-            f"The joint F-test does not clear the conventional 5% bar (p={_fmt_p(ff.f_p_value)}) — treat the "
+        f_test_bullet = (
+            f"The joint F-test does not clear the conventional 5% bar ({_fmt_p_label(ff.f_p_value)}) — treat the "
             f"whole factor-model fit, not just the individual loadings above, cautiously here."
         )
 
-    return f"{clause1} {clause2} {clause3}"
+    return TakeawayBody(lead=lead, bullets=[lift_bullet, f_test_bullet])
 
 
 # --- 3d. frontier_position -----------------------------------------------
 
 
-def _frontier_position_body(ef: EfficientFrontierResult, degenerate: bool, gap: float | None) -> str:
+def _frontier_position_body(ef: EfficientFrontierResult, degenerate: bool, gap: float | None) -> TakeawayBody:
     cp = ef.current_portfolio
     n = len(ef.symbols)
 
@@ -386,30 +421,42 @@ def _frontier_position_body(ef: EfficientFrontierResult, degenerate: bool, gap: 
             if n < 2
             else "holdings whose historical return/risk profiles are effectively identical"
         )
-        return (
-            f"With {reason}, there's no meaningful spread of alternative portfolios to compare against — a "
-            f"frontier comparison isn't informative here."
+        return TakeawayBody(
+            lead=(
+                f"With {reason}, there's no meaningful spread of alternative portfolios to compare against — a "
+                f"frontier comparison isn't informative here."
+            ),
+            bullets=[],
         )
 
     if gap is None:
-        return (
-            f"This portfolio's volatility ({cp.volatility_annualized:.1%}) falls outside the range the modeled "
-            f"frontier covers for this holding set ({ef.n_obs} observations, {n} holdings), so a same-volatility "
-            f"return comparison isn't available."
+        return TakeawayBody(
+            lead=(
+                f"This portfolio's volatility ({cp.volatility_annualized:.1%}) falls outside the range the "
+                f"modeled frontier covers for this holding set ({ef.n_obs} observations, {n} holdings), so a "
+                f"same-volatility return comparison isn't available."
+            ),
+            bullets=[],
         )
 
     if cp.is_on_frontier or gap <= 0:
-        return (
-            f"This portfolio's specific weighting is numerically on the modeled frontier for its return level — "
-            f"among all long-only re-weightings of exactly these {n} holdings, none would have delivered more "
-            f"return at this same risk level, historically."
+        return TakeawayBody(
+            lead=(
+                f"This portfolio's specific weighting is numerically on the modeled frontier for its return "
+                f"level — among all long-only re-weightings of exactly these {n} holdings, none would have "
+                f"delivered more return at this same risk level, historically."
+            ),
+            bullets=[],
         )
 
     if gap < FRONTIER_GAP_NEGLIGIBLE:
-        return (
-            f"The gap to the frontier is small ({gap:.1%}) — small enough to be within the range explainable by "
-            f"estimation noise over a {ef.n_obs}-observation window, not a structurally meaningful mismatch "
-            f"between these weights and this holding set's own risk/return relationships."
+        return TakeawayBody(
+            lead=(
+                f"The gap to the frontier is small ({gap:.1%}) — small enough to be within the range explainable "
+                f"by estimation noise over a {ef.n_obs}-observation window, not a structurally meaningful "
+                f"mismatch between these weights and this holding set's own risk/return relationships."
+            ),
+            bullets=[],
         )
 
     lead_in = (
@@ -418,17 +465,22 @@ def _frontier_position_body(ef: EfficientFrontierResult, degenerate: bool, gap: 
         f"{cp.expected_return_annualized:.1%} — a {gap:.1%}-point gap"
     )
     if gap < FRONTIER_GAP_LARGE:
-        return (
-            f"{lead_in}. That's moderate: some of the historical return/risk relationship among just these {n} "
-            f"holdings wasn't captured by this specific weighting, without being a dramatic mismatch."
+        return TakeawayBody(
+            lead=f"{lead_in}.",
+            bullets=[
+                f"That's moderate: some of the historical return/risk relationship among just these {n} "
+                f"holdings wasn't captured by this specific weighting, without being a dramatic mismatch."
+            ],
         )
 
-    return (
-        f"{lead_in} — large by this analysis's own standard. Historically, some combination of these same {n} "
-        f"holdings, long-only, could have delivered meaningfully more return for the same volatility (or the "
-        f"same return for meaningfully less volatility) than the as-entered weights — not a suggestion to "
-        f"reweight, and not a signal to act on, just a description of the historical relationship among the "
-        f"holdings you entered."
+    return TakeawayBody(
+        lead=f"{lead_in} — large by this analysis's own standard.",
+        bullets=[
+            f"Historically, some combination of these same {n} holdings, long-only, could have delivered "
+            f"meaningfully more return for the same volatility (or the same return for meaningfully less "
+            f"volatility) than the as-entered weights — not a suggestion to reweight, and not a signal to act "
+            f"on, just a description of the historical relationship among the holdings you entered."
+        ],
     )
 
 
