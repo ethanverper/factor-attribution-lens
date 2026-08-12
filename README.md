@@ -9,8 +9,11 @@ live market data, with plain-language explanations and full statistical
 diagnostics, not a black-box score.
 
 **Status**: functionally complete and QA sign-off'd (Phases 1–10j; see
-[Status](#status) below). Not yet deployed to a public URL — see
-[Running it](#running-it) for dev mode in the meantime.
+[Status](#status) below). Deployment config (Dockerfile, Railway config,
+verified locally in the exact production shape) is done — see
+[Deployment](#deployment); the live public URL is pending Ethan completing
+Railway's own account/GitHub-authorization step. See [Running
+it](#running-it) for dev mode in the meantime.
 
 This is internal decision-support analytics only — no personalized
 investment advice, no trade execution, no custody of funds.
@@ -176,6 +179,31 @@ installed (not the full `openbb` meta-package), since the app only ever
 calls `obb.equity.price.historical` via the `yfinance` provider — see
 [`docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md`](docs/decisions/0014-phase10e-trim-openbb-dependency-bloat.md).
 
+## Deployment
+
+Default hosting platform: [Railway](https://railway.com) (`docs/project-standards.md`
+rule 3). Deployment shape is one service — the `Dockerfile` (repo root)
+builds `frontend/dist/` in a Node stage, then a `uv`-managed Python 3.11
+stage installs backend deps and serves the whole app (API + built SPA) as a
+single process, per [decision 0018](docs/decisions/0018-phase10i-react-rebuild.md)
+§2. `railway.json` points Railway at that Dockerfile and configures a
+`/health` health check.
+
+- **No environment variables are required.** Both live data sources are
+  keyless (OpenBB's `yfinance` provider; Kenneth French's Data Library via
+  `pandas-datareader`) — see [decision
+  0002](docs/decisions/0002-phase1-stack-and-data-sourcing.md).
+- **Redeploying**: once the GitHub repo is connected in Railway, a push to
+  `main` triggers an automatic rebuild and redeploy — no manual dashboard
+  steps for routine changes.
+- **Local production-shape check** (what Railway's container runs, without
+  Docker itself): `cd frontend && npm install && npm run build && cd ..`,
+  then `PORT=8000 uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- Full rationale (Dockerfile vs. Nixpacks, the OpenBB first-import
+  build-time gotcha, static-asset serving verification, and the Railway
+  login/GitHub-connection handoff) is in [decision
+  0023](docs/decisions/0023-phase11-railway-deployment.md).
+
 ## Project layout
 
 ```
@@ -228,9 +256,12 @@ institutional visual refinement, and a full independent QA sign-off) are
 done — see [`docs/roadmap.md`](docs/roadmap.md) for the phase-by-phase
 history. QA's independent verdict (Phase 10j,
 [full report](docs/status/2026-08-12-phase10j-qa-signoff.md)): **ready**,
-nothing blocking. Public deployment (default platform: Railway) is the
-one remaining phase, gated on an explicit go-ahead before provisioning
-any hosting resource.
+nothing blocking. Public deployment (Railway, per [decision
+0023](docs/decisions/0023-phase11-railway-deployment.md)) has its config
+built and verified locally in the exact production shape; the live URL is
+pending Ethan completing Railway's account/GitHub-authorization step
+himself (an interactive login `devops` doesn't perform on his behalf) —
+see [Deployment](#deployment).
 
 ## Decision log
 
