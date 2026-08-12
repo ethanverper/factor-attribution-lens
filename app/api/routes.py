@@ -27,9 +27,13 @@ from fastapi import APIRouter, HTTPException
 
 from app.api import tickers
 from app.api.attribution import compute_return_attribution, compute_risk_attribution
+from app.api.interpretation import compute_interpretation
 from app.api.schemas import (
     AnalysisResponse,
     BenchmarkInfo,
+    InterpretationFlag,
+    InterpretationResponse,
+    InterpretationTakeaway,
     RiskAttributionResponse,
     ReturnAttributionResponse,
     SampleHolding,
@@ -125,6 +129,7 @@ def post_analysis(request: PortfolioRequest) -> AnalysisResponse:
 
     return_attribution = compute_return_attribution(analysis.factor_model, data)
     risk_attribution = compute_risk_attribution(analysis.factor_model)
+    interpretation = compute_interpretation(analysis)
 
     return AnalysisResponse(
         meta=data.meta,
@@ -141,5 +146,13 @@ def post_analysis(request: PortfolioRequest) -> AnalysisResponse:
             factor_explained_share=risk_attribution.factor_explained_share,
             idiosyncratic_share=risk_attribution.idiosyncratic_share,
             r_squared_raw=risk_attribution.r_squared_raw,
+        ),
+        interpretation=InterpretationResponse(
+            headline=interpretation.headline,
+            takeaways=[
+                InterpretationTakeaway(id=t.id, title=t.title, body=t.body, is_headline=t.is_headline)
+                for t in interpretation.takeaways
+            ],
+            flags=[InterpretationFlag(id=f.id, severity=f.severity, message=f.message) for f in interpretation.flags],
         ),
     )

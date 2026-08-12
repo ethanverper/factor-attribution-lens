@@ -126,11 +126,31 @@ export interface RiskAttribution {
   r_squared_raw: number
 }
 
+export interface InterpretationTakeaway {
+  id: "beta" | "style_tilt" | "explanatory_power" | "frontier_position"
+  title: string
+  body: string
+  is_headline: boolean
+}
+
+export interface InterpretationFlag {
+  id: "covariance_regularized" | "short_data_window"
+  severity: "info" | "warning"
+  message: string
+}
+
+export interface Interpretation {
+  headline: string
+  takeaways: InterpretationTakeaway[]
+  flags: InterpretationFlag[]
+}
+
 export interface AnalysisResponse {
   meta: RequestMeta
   analysis: PortfolioAnalysis
   return_attribution: ReturnAttribution
   risk_attribution: RiskAttribution
+  interpretation: Interpretation
 }
 
 export interface TickerInfo {

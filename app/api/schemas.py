@@ -8,6 +8,7 @@ results page needs to render a freshness banner, all in one bundle.
 from __future__ import annotations
 
 from datetime import date as Date
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -33,11 +34,31 @@ class RiskAttributionResponse(BaseModel):
     r_squared_raw: float
 
 
+class InterpretationTakeaway(BaseModel):
+    id: Literal["beta", "style_tilt", "explanatory_power", "frontier_position"]
+    title: str
+    body: str
+    is_headline: bool
+
+
+class InterpretationFlag(BaseModel):
+    id: Literal["covariance_regularized", "short_data_window"]
+    severity: Literal["info", "warning"]
+    message: str
+
+
+class InterpretationResponse(BaseModel):
+    headline: str
+    takeaways: list[InterpretationTakeaway]
+    flags: list[InterpretationFlag]
+
+
 class AnalysisResponse(BaseModel):
     meta: RequestMeta
     analysis: PortfolioAnalysis
     return_attribution: ReturnAttributionResponse
     risk_attribution: RiskAttributionResponse
+    interpretation: InterpretationResponse
 
 
 class TickerInfo(BaseModel):

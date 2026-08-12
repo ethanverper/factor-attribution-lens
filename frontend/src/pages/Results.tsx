@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { SectionHeader } from "@/components/SectionHeader"
+import { InterpretationSection } from "@/components/InterpretationSection"
 import { StatTile, StatRow } from "@/components/StatTile"
 import { DivergingBarChart, type DivergingBarRow } from "@/components/charts/DivergingBarChart"
 import { FrontierChart } from "@/components/charts/FrontierChart"
@@ -85,7 +86,7 @@ export function Results() {
     )
   }
 
-  const { meta, analysis, return_attribution, risk_attribution } = data
+  const { meta, analysis, return_attribution, risk_attribution, interpretation } = data
   const holdingsStr = meta.holdings.map((h) => `${h.symbol} ${fmtPct(h.weight, 1)}`).join(", ")
   const shareUrl = typeof window !== "undefined" ? window.location.href : ""
 
@@ -144,6 +145,8 @@ export function Results() {
           sell, or rebalance, and not a signal of any kind.
         </div>
       </div>
+
+      <InterpretationSection interpretation={interpretation} />
 
       <div className="bg-muted/40 mb-5 flex flex-wrap items-center gap-2.5 rounded-lg border p-3">
         <span className="text-muted-foreground font-mono text-[10.5px] tracking-wide uppercase">Share this result</span>
@@ -237,9 +240,9 @@ export function Results() {
             {ef.covariance_regularized ? (
               <div className="bg-warning/10 border-warning/40 mb-3 flex gap-2 rounded-md border p-2.5 text-[12.5px]">
                 <AlertTriangle className="text-warning size-4 flex-none" />
-                The covariance matrix for this holding set required regularization (condition number{" "}
-                {fmtNum(ef.covariance_condition_number, 1)}) — holdings may be highly correlated or the aligned data
-                window may be short. Treat this frontier as less reliable than usual.
+                Covariance matrix regularized (condition number {fmtNum(ef.covariance_condition_number, 1)}) — see
+                the data-quality flag in Interpretation &amp; Key Takeaways above for why and what it means for this
+                frontier.
               </div>
             ) : null}
             {frontierIsDegenerate ? (

@@ -1,10 +1,16 @@
 // Ported from the removed `app/dashboard/shell.py::render_learning_section`
-// (Phase 9/9e). Diagrams are separate React components
-// (`src/components/diagrams/`), referenced here by id.
+// (Phase 9/9e), restructured into a curriculum per decision 0020 (Phase 10l)
+// -- a numbered `id`, a plain-text `teaser` (the collapsed-accordion preview,
+// Udemy's own lesson-list pattern), and `note` repurposed as footnote-marker
+// content (institutional citation device, decision 0020 section 2d) rather
+// than an always-visible dashed-border paragraph. Diagrams are separate React
+// components (`src/components/diagrams/`), referenced here by id.
 
 export interface LearningCard {
+  id: string
   tag: string
   title: string
+  teaser: string
   plain: string
   technical: string
   note: string | null
@@ -14,8 +20,10 @@ export interface LearningCard {
 
 export const LEARNING_CARDS: LearningCard[] = [
   {
+    id: "beta",
     tag: "Results · 1. Factor exposure",
     title: "CAPM beta &mdash; your market sensitivity",
+    teaser: "Beta answers one question: when the market moves 1%, how much does your portfolio tend to move?",
     plain:
       "Beta answers one question: when the market moves 1%, how much does your portfolio tend to move? A beta of 1.20 means your portfolio has historically swung about 20% harder than the benchmark in both directions &mdash; bigger gains in up markets, bigger losses in down markets. A beta of 0.60 means the opposite: your portfolio has historically been noticeably calmer than the market. Beta on its own doesn't say whether that's good or bad &mdash; it says how much of your risk is simply &ldquo;the market, amplified or dampened,&rdquo; versus something else.",
     technical:
@@ -28,8 +36,10 @@ export const LEARNING_CARDS: LearningCard[] = [
     diagram: "capm",
   },
   {
+    id: "fama_french",
     tag: "Results · 1. Factor exposure",
     title: "Fama-French loadings &mdash; what kind of stocks you actually hold",
+    teaser: "CAPM only asks how much market. Fama-French asks a follow-up: what kind of market exposure.",
     plain:
       "CAPM only asks &ldquo;how much market.&rdquo; Fama-French asks a follow-up: <em>what kind</em> of market exposure &mdash; is your portfolio tilted toward small companies or large ones, cheap-relative-to-book (&ldquo;value&rdquo;) stocks or expensive-growth ones, highly profitable companies or not, conservatively-run companies or aggressively-expanding ones? Each factor loading is a lean, not a bet: a positive Size (SMB) loading means your holdings behave more like small-cap stocks than large-cap ones; a positive Value (HML) loading means they behave more like cheap value stocks than expensive growth stocks; and so on for Profitability (RMW) and Investment (CMA). None of this is prescriptive &mdash; it's a description of the exposures you already have, in the same language professional factor investors use to describe theirs.",
     technical:
@@ -42,8 +52,11 @@ export const LEARNING_CARDS: LearningCard[] = [
     diagram: "ci",
   },
   {
+    id: "frontier",
     tag: "Results · 2. Efficient frontier",
     title: "Frontier position &mdash; are you getting paid for the risk you're taking",
+    teaser:
+      "Given exactly the holdings you entered and how they've historically moved together, there's a best-achievable return for every level of risk.",
     plain:
       "Given exactly the holdings you entered (nothing added, nothing swapped out) and how they've historically moved together, there's a best-achievable return for every level of risk (volatility) &mdash; just by re-weighting the same holdings, long-only, no leverage, no shorting. That curve is the modeled efficient frontier. Your as-entered portfolio is one dot; the frontier is the outer edge of what your own holdings-set could have achieved. If your dot sits noticeably below the line, it means: at the amount of risk you're already carrying, a different weighting of the exact same names could historically have earned more return for that same risk &mdash; not a suggestion to hold different stocks, and not a signal to act on. It's a mirror, not an instruction.",
     technical:
@@ -57,13 +70,16 @@ export const LEARNING_CARDS: LearningCard[] = [
     diagram: "frontier",
   },
   {
+    id: "attribution",
     tag: "Results · 3. Return &amp; risk attribution",
     title: "Return &amp; risk attribution &mdash; putting it back together",
+    teaser: "The three views above are exposures; this one is accounting.",
     plain:
       "The three views above are exposures; this one is accounting. Your portfolio's average per-period return gets split, exactly, into how much came from being exposed to the market, how much from your size/value/profitability/investment tilts, and how much is unexplained by any of that (&ldquo;alpha&rdquo; &mdash; could be stock-picking, could just be noise in this sample). Separately, your risk (return variance) gets split into how much is explained by those same broad factors versus how much is <em>idiosyncratic</em> &mdash; specific to the individual names you hold rather than the market or style tilts they share. A portfolio that's mostly idiosyncratic risk is a bet on specific companies; a portfolio that's mostly factor risk is, whether you meant it to be or not, mostly a bet on the market and a couple of style tilts.",
     technical:
-      "Return attribution is an exact algebraic identity, not an approximation: because the Fama-French OLS fit includes an intercept, the fitted residual has zero mean over the regression sample, so <code>mean(R<sub>p</sub> &minus; R<sub>f</sub>) = &alpha; + &Sigma;<sub>i</sub> &beta;<sub>i</sub> &middot; mean(factor<sub>i</sub>)</code> reproduces your realized mean excess return exactly, not approximately (see the module docstring in <code>app/api/attribution.py</code> for the full derivation). Risk attribution is simply the factor model's own <code>R&sup2;</code> (factor-explained share) and <code>1 &minus; R&sup2;</code> (idiosyncratic share) &mdash; no extra computation beyond what the regression already reports. Contributions are shown per-period, not re-annualized, because CAPM/Fama-French alpha and the frontier's inputs use two deliberately different annualization conventions (compounding vs. linear scaling &mdash; decision 0003); summing already-annualized pieces from different conventions would silently break the identity above.",
-    note: null,
+      "Return attribution is an exact algebraic identity, not an approximation: because the Fama-French OLS fit includes an intercept, the fitted residual has zero mean over the regression sample, so <code>mean(R<sub>p</sub> &minus; R<sub>f</sub>) = &alpha; + &Sigma;<sub>i</sub> &beta;<sub>i</sub> &middot; mean(factor<sub>i</sub>)</code> reproduces your realized mean excess return exactly, not approximately (see the module docstring in <code>app/api/attribution.py</code> for the full derivation). Risk attribution is simply the factor model's own <code>R&sup2;</code> (factor-explained share) and <code>1 &minus; R&sup2;</code> (idiosyncratic share) &mdash; no extra computation beyond what the regression already reports.",
+    note:
+      "Contributions are shown per-period, not re-annualized: CAPM/Fama-French alpha and the frontier's inputs use two deliberately different annualization conventions (compounding vs. linear scaling &mdash; decision 0003), so summing already-annualized pieces from different conventions would silently break the identity above.",
     xrefs: [
       { to: "/references", label: "See the exact identity" },
       { to: "/results", label: "See your attribution" },
