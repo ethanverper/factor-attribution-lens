@@ -1,6 +1,8 @@
+import { Fragment } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { SectionHeader } from "@/components/SectionHeader"
+import { Callout } from "@/components/Callout"
 import { REFERENCE_CARDS, WORKS_CITED } from "@/data/references"
 
 export function References() {
@@ -40,8 +42,35 @@ export function References() {
                   </div>
                 ))}
               </div>
-              <p className="text-muted-foreground text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: card.legend }} />
+              {card.legend.length ? (
+                <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                  {card.legend.map((e) => (
+                    <Fragment key={e.term}>
+                      <dt className="text-foreground font-mono" dangerouslySetInnerHTML={{ __html: e.term }} />
+                      <dd dangerouslySetInnerHTML={{ __html: e.def }} />
+                    </Fragment>
+                  ))}
+                </dl>
+              ) : null}
+              {card.legendCaption ? (
+                <p className="text-muted-foreground mt-1.5 text-[11.5px]" dangerouslySetInnerHTML={{ __html: card.legendCaption }} />
+              ) : null}
+              {card.legendNote ? (
+                <p className="text-muted-foreground text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: card.legendNote }} />
+              ) : null}
               <p className="text-muted-foreground mt-2.5 max-w-[66ch] text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: card.note }} />
+              {card.noteBullets ? (
+                <ul className="mt-2 flex flex-col gap-1 pl-4 text-[12.5px] leading-relaxed">
+                  {card.noteBullets.map((b, i) => (
+                    <li key={i} className="text-muted-foreground list-disc marker:text-primary/60" dangerouslySetInnerHTML={{ __html: b }} />
+                  ))}
+                </ul>
+              ) : null}
+              {card.noteCallout ? (
+                <Callout variant={card.noteCallout.variant} label={card.noteCallout.label}>
+                  <span dangerouslySetInnerHTML={{ __html: card.noteCallout.text }} />
+                </Callout>
+              ) : null}
               <p className="text-muted-foreground mt-3 border-t border-dashed pt-3 text-[12.5px] leading-relaxed" dangerouslySetInnerHTML={{ __html: card.source }} />
             </CardContent>
           </Card>

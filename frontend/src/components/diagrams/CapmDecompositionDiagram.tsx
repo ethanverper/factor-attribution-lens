@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import gsap from "gsap"
 import { DiagramFigure } from "@/components/diagrams/DiagramFigure"
+import { Slider } from "@/components/ui/slider"
 import { useInView } from "@/hooks/use-in-view"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
+import { fmtNum } from "@/lib/format"
 
 const WIDTH = 800
 const HEIGHT = 165
@@ -16,6 +18,16 @@ const SEG1 = { x: 0, w: 86 }
 const SEG2 = { x: SEG1.x + SEG1.w + GAP, w: 330 }
 const SEG3 = { x: SEG2.x + SEG2.w + GAP, w: 140 }
 const TOTAL = { x: SEG3.x + SEG3.w + GAP, w: 150 }
+
+const BETA_MIN = 0.4
+const BETA_MAX = 1.6
+/** Illustrative market-exposure block width, as a fraction of SEG2's fixed
+ * reserved space -- interpolated from beta so the block visibly grows/
+ * shrinks but never overlaps the alpha block or joiners on either side. */
+function widthForBeta(beta: number) {
+  const t = (beta - BETA_MIN) / (BETA_MAX - BETA_MIN)
+  return SEG2.w * (0.4 + 0.6 * t)
+}
 
 function Block({
   x,
@@ -57,16 +69,24 @@ function Joiner({ x, glyph }: { x: number; glyph: string }) {
 /** CAPM decomposition: Rp = Rf + beta*(Rm - Rf) + alpha, as three blocks
  * summing exactly to the total -- ported from
  * `diagrams.py::capm_decomposition_diagram`, revealing left-to-right on
- * scroll-into-view, matching the equation's own reading order. */
+ * scroll-into-view, matching the equation's own reading order. A draggable
+ * illustrative beta (decision 0020 §3d) lets the reader manipulate the
+ * market-exposure block's width live, reusing the `Slider` already built
+ * for Inputs' allocation controls -- illustrative only, not this run's
+ * data (matches the diagram's own caption disclosure). */
 export function CapmDecompositionDiagram() {
   const { ref, inView } = useInView<HTMLDivElement>(0.4)
   const reducedMotion = useReducedMotion()
+  const [beta, setBeta] = useState(1.0)
   const refs = [
     useRef<SVGGElement>(null),
     useRef<SVGGElement>(null),
     useRef<SVGGElement>(null),
     useRef<SVGGElement>(null),
   ]
+  const marketRectRef = useRef<SVGRectElement>(null)
+  const marketTokenRef = useRef<SVGTextElement>(null)
+  const marketPlainRef = useRef<SVGTextElement>(null)
 
   useEffect(() => {
     const elements = refs.map((r) => r.current).filter(Boolean) as SVGGElement[]
@@ -82,39 +102,80 @@ export function CapmDecompositionDiagram() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView, reducedMotion])
 
+  useEffect(() => {
+    const rect = marketRectRef.current
+    const token = marketTokenRef.current
+    const plain = marketPlainRef.current
+    if (!rect || !token || !plain) return
+    const w = widthForBeta(beta)
+    const cx = SEG2.x + w / 2
+    if (reducedMotion) {
+      gsap.set(rect, { attr: { width: w } })
+      gsap.set([token, plain], { attr: { x: cx } })
+      return
+    }
+    gsap.to(rect, { attr: { width: w }, duration: 0.35, ease: "power2.out" })
+    gsap.to([token, plain], { attr: { x: cx }, duration: 0.35, ease: "power2.out" })
+  }, [beta, reducedMotion])
+
   return (
-    <DiagramFigure
-      ref={ref}
-      ariaLabel="Diagram: a portfolio's return decomposed into a risk-free baseline, market exposure scaled by beta, and alpha, summing exactly to the total return"
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      caption={
-        <>
-          How a CAPM return actually adds up: a risk-free floor, plus the market's move scaled by your beta, plus
-          whatever's left over. The three blocks sum exactly to your realized return &mdash; alpha isn't a bonus
-          sitting on top of the other two, it's literally &ldquo;whatever the first two blocks didn't already
-          explain.&rdquo; Widths here are illustrative, not your portfolio's actual proportions &mdash; see Results
-          for those.
-        </>
-      }
-    >
-      <text x={WIDTH / 2} y={18} fontSize={12.5} textAnchor="middle" fill="var(--muted-foreground)">
-        Rp − Rf = α + β·(Rm − Rf)
-      </text>
-      <Block groupRef={refs[0]} x={SEG1.x} w={SEG1.w} fill="var(--border)" token="Rf" plain="Risk-free" />
-      <Joiner x={SEG1.x + SEG1.w} glyph="+" />
-      <Block groupRef={refs[1]} x={SEG2.x} w={SEG2.w} fill="var(--color-chart-1)" token="β·(Rm−Rf)" plain="Market exposure (β-scaled)" />
-      <Joiner x={SEG2.x + SEG2.w} glyph="+" />
-      <Block groupRef={refs[2]} x={SEG3.x} w={SEG3.w} fill="var(--primary)" token="α" plain="Alpha" />
-      <Joiner x={SEG3.x + SEG3.w} glyph="=" />
-      <g ref={refs[3]} style={{ opacity: 0 }}>
-        <rect x={TOTAL.x} y={BAR_Y} width={TOTAL.w} height={BAR_H} rx={4} fill="var(--card)" stroke="var(--foreground)" strokeWidth={1.5} />
-        <text x={TOTAL.x + TOTAL.w / 2} y={99} fontSize={15} fontWeight={700} textAnchor="middle" fill="var(--foreground)">
-          Rp
+    <div>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="text-muted-foreground flex-none font-mono text-[10.5px] tracking-wide uppercase">
+          Try it: drag &beta;
+        </span>
+        <Slider
+          min={BETA_MIN}
+          max={BETA_MAX}
+          step={0.05}
+          value={[beta]}
+          onValueChange={([v]) => setBeta(v)}
+          className="max-w-[200px]"
+        />
+        <span className="tabular text-foreground w-10 flex-none text-right text-[12.5px]">{fmtNum(beta, 2)}</span>
+      </div>
+
+      <DiagramFigure
+        ref={ref}
+        ariaLabel="Diagram: a portfolio's return decomposed into a risk-free baseline, market exposure scaled by beta, and alpha, summing exactly to the total return -- the market-exposure block's width scales with an adjustable illustrative beta"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        caption={
+          <>
+            How a CAPM return actually adds up: a risk-free floor, plus the market's move scaled by your beta, plus
+            whatever's left over. The three blocks sum exactly to your realized return &mdash; alpha isn't a bonus
+            sitting on top of the other two, it's literally &ldquo;whatever the first two blocks didn't already
+            explain.&rdquo; Widths here are illustrative, not your portfolio's actual proportions &mdash; see Results
+            for those.
+          </>
+        }
+      >
+        <text x={WIDTH / 2} y={18} fontSize={12.5} textAnchor="middle" fill="var(--muted-foreground)">
+          Rp − Rf = α + β·(Rm − Rf)
         </text>
-        <text x={TOTAL.x + TOTAL.w / 2} y={PLAIN_Y} fontSize={11} textAnchor="middle" fill="var(--foreground)" opacity={0.85}>
-          Total return
-        </text>
-      </g>
-    </DiagramFigure>
+        <Block groupRef={refs[0]} x={SEG1.x} w={SEG1.w} fill="var(--border)" token="Rf" plain="Risk-free" />
+        <Joiner x={SEG1.x + SEG1.w} glyph="+" />
+        <g ref={refs[1]} style={{ opacity: 0 }}>
+          <rect ref={marketRectRef} x={SEG2.x} y={BAR_Y} width={widthForBeta(beta)} height={BAR_H} rx={4} fill="var(--color-chart-1)" />
+          <text ref={marketTokenRef} x={SEG2.x + widthForBeta(beta) / 2} y={TOKEN_Y} fontSize={11.5} textAnchor="middle" fill="var(--muted-foreground)">
+            β·(Rm−Rf)
+          </text>
+          <text ref={marketPlainRef} x={SEG2.x + widthForBeta(beta) / 2} y={PLAIN_Y} fontSize={11} textAnchor="middle" fill="var(--foreground)" opacity={0.85}>
+            Market exposure (β-scaled)
+          </text>
+        </g>
+        <Joiner x={SEG2.x + SEG2.w} glyph="+" />
+        <Block groupRef={refs[2]} x={SEG3.x} w={SEG3.w} fill="var(--primary)" token="α" plain="Alpha" />
+        <Joiner x={SEG3.x + SEG3.w} glyph="=" />
+        <g ref={refs[3]} style={{ opacity: 0 }}>
+          <rect x={TOTAL.x} y={BAR_Y} width={TOTAL.w} height={BAR_H} rx={4} fill="var(--card)" stroke="var(--foreground)" strokeWidth={1.5} />
+          <text x={TOTAL.x + TOTAL.w / 2} y={99} fontSize={15} fontWeight={700} textAnchor="middle" fill="var(--foreground)">
+            Rp
+          </text>
+          <text x={TOTAL.x + TOTAL.w / 2} y={PLAIN_Y} fontSize={11} textAnchor="middle" fill="var(--foreground)" opacity={0.85}>
+            Total return
+          </text>
+        </g>
+      </DiagramFigure>
+    </div>
   )
 }

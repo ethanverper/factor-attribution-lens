@@ -185,6 +185,7 @@ export function Results() {
                 numericValue={capm.beta.estimate}
                 format={(n) => fmtNum(n, 2)}
                 sub={`95% CI [${fmtNum(capm.beta.ci_lower_95, 2)}, ${fmtNum(capm.beta.ci_upper_95, 2)}] · t=${fmtNum(capm.beta.t_stat, 2)}, p=${fmtPvalue(capm.beta.p_value)}`}
+                source={`OpenBB (${meta.equity_provider})`}
               />
               <StatTile
                 label="CAPM alpha (annualized)"
@@ -217,7 +218,12 @@ export function Results() {
             />
             <StatRow>
               <StatTile label="Fama-French alpha (annualized)" value={fmtPct(ff.alpha_annualized, 2, true)} />
-              <StatTile label="Fama-French R²" value={fmtPct(ff.r_squared, 1)} sub={`adj. ${fmtPct(ff.adj_r_squared, 1)}`} />
+              <StatTile
+                label="Fama-French R²"
+                value={fmtPct(ff.r_squared, 1)}
+                sub={`adj. ${fmtPct(ff.adj_r_squared, 1)}`}
+                source="Kenneth French Data Library"
+              />
               <StatTile label="F-statistic" value={fmtNum(ff.f_statistic, 1)} sub={`p=${fmtPvalue(ff.f_p_value)}, n=${ff.n_obs} ${ff.frequency} obs`} />
             </StatRow>
           </CardContent>
@@ -271,7 +277,11 @@ export function Results() {
             <StatRow>
               <StatTile label="Your annualized return" value={fmtPct(cp.expected_return_annualized, 2)} />
               <StatTile label="Your annualized volatility" value={fmtPct(cp.volatility_annualized, 2)} />
-              <StatTile label="Your Sharpe ratio" value={fmtRatio(cp.sharpe_ratio)} />
+              <StatTile
+                label="Your Sharpe ratio"
+                value={fmtRatio(cp.sharpe_ratio)}
+                source={`OpenBB (${meta.equity_provider}) · Markowitz optimization`}
+              />
               <StatTile label="Return gap at matched volatility" value={fmtPct(gap, 2, true)} sub={gapSub} />
             </StatRow>
             <TableViewTwin

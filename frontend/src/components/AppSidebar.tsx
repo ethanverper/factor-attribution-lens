@@ -77,6 +77,17 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="gap-3 px-3 pb-4">
         <ThemeToggle />
+        <p className="font-mono text-[10px] tracking-wide uppercase text-muted-foreground">
+          Built by{" "}
+          <a
+            href="https://github.com/ethanverper/factor-lens"
+            target="_blank"
+            rel="noreferrer"
+            className="text-foreground underline underline-offset-2 hover:text-primary"
+          >
+            Ethan Verduzco
+          </a>
+        </p>
         <p className="text-[10.5px] leading-relaxed text-muted-foreground">
           Internal decision-support analytics. Not investment advice, not a recommendation to buy, sell, or
           rebalance.

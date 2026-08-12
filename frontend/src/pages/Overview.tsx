@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { Target, Layers, LineChart as LineChartIcon, type LucideIcon } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FrontierChart } from "@/components/charts/FrontierChart"
 import { fetchSamplePortfolio } from "@/lib/api"
@@ -50,10 +52,26 @@ export function Overview() {
           <h2 className="font-display mb-3 text-[22px] leading-snug font-medium tracking-tight sm:text-[25px]">
             Factor Lens explains why a portfolio behaves the way it does.
           </h2>
-          <p className="text-muted-foreground mb-6 max-w-[48ch] text-[14.5px] leading-relaxed">
-            CAPM beta, Fama-French loadings, and Markowitz positioning — computed live, with statistical
-            diagnostics shown alongside every estimate.
+          <p className="text-muted-foreground mb-4 max-w-[54ch] text-[14.5px] leading-relaxed">
+            Enter your holdings and a benchmark — Factor Lens runs CAPM, Fama-French, and Markowitz optimization on
+            live market data and returns your beta, factor loadings, and frontier position, each with full
+            statistical diagnostics.
           </p>
+          <div className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span className="text-muted-foreground mr-0.5 font-mono text-[10.5px] tracking-wide uppercase">You provide</span>
+            <Badge variant="outline" className="font-mono text-[10.5px] font-normal">
+              Holdings (tickers + %)
+            </Badge>
+            <Badge variant="outline" className="font-mono text-[10.5px] font-normal">
+              Benchmark
+            </Badge>
+            <Badge variant="outline" className="font-mono text-[10.5px] font-normal">
+              Date range
+            </Badge>
+            <Badge variant="outline" className="font-mono text-[10.5px] font-normal">
+              Factor model (3- or 5-factor)
+            </Badge>
+          </div>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg">
               <Link to="/inputs">Enter your holdings →</Link>
@@ -100,13 +118,18 @@ export function Overview() {
               />
             )}
             {data ? (
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t pt-3 font-mono">
-                <span className="text-primary text-[22px] font-semibold">
-                  CAPM β {fmtNum(data.analysis.capm.beta.estimate, 2)}
-                </span>
-                <span className="text-muted-foreground text-[13px]">
-                  R² {fmtPct(data.analysis.capm.r_squared, 1)} · AAPL/MSFT/GOOGL/AMZN vs. S&amp;P 500
-                </span>
+              <div className="mt-2 border-t pt-3 font-mono">
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                  <span className="text-primary text-[22px] font-semibold">
+                    CAPM β {fmtNum(data.analysis.capm.beta.estimate, 2)}
+                  </span>
+                  <span className="text-muted-foreground text-[13px]">
+                    R² {fmtPct(data.analysis.capm.r_squared, 1)} · AAPL/MSFT/GOOGL/AMZN vs. S&amp;P 500
+                  </span>
+                </div>
+                <div className="text-muted-foreground/70 mt-1.5 text-[9.5px] tracking-wide uppercase">
+                  Source: OpenBB (yfinance) · Kenneth French Data Library
+                </div>
               </div>
             ) : null}
           </CardContent>
@@ -114,28 +137,42 @@ export function Overview() {
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <MethodCard mark="CAPM" title="Market beta" body="Single-factor exposure to your chosen benchmark, with confidence intervals and significance." />
         <MethodCard
+          icon={Target}
+          mark="CAPM"
+          title="Market beta"
+          body="Single-factor exposure to your chosen benchmark, with confidence intervals and significance."
+        />
+        <MethodCard
+          icon={Layers}
           mark="Fama-French"
           title="Factor loadings"
           body="3- or 5-factor exposure (market, size, value, and optionally profitability/investment)."
         />
-        <MethodCard mark="Markowitz" title="Efficient frontier" body="Where your as-entered portfolio sits against the modeled long-only efficient set." />
+        <MethodCard
+          icon={LineChartIcon}
+          mark="Markowitz"
+          title="Efficient frontier"
+          body="Where your as-entered portfolio sits against the modeled long-only efficient set."
+        />
       </div>
 
       <p className="text-muted-foreground mt-8 border-t pt-4 text-[12px] leading-relaxed">
         Computed live from OpenBB (yfinance provider) equity/benchmark prices and Kenneth French's Data Library
         factor series — see Tools &amp; Technologies for the full stack, and References &amp; Formulas for the
-        exact math, formula-by-formula, with sources.
+        exact math, formula-by-formula, with sources — Built by Ethan Verduzco.
       </p>
     </div>
   )
 }
 
-function MethodCard({ mark, title, body }: { mark: string; title: string; body: string }) {
+function MethodCard({ icon: Icon, mark, title, body }: { icon: LucideIcon; mark: string; title: string; body: string }) {
   return (
     <div className="bg-background rounded-lg border p-4">
-      <div className="text-muted-foreground font-mono text-[10.5px] tracking-wide uppercase">{mark}</div>
+      <div className="text-muted-foreground flex items-center gap-1.5 font-mono text-[10.5px] tracking-wide uppercase">
+        <Icon className="text-primary size-3.5" />
+        {mark}
+      </div>
       <h3 className="font-display mt-1.5 mb-1 text-[15px] font-medium">{title}</h3>
       <p className="text-muted-foreground text-[12.5px] leading-relaxed">{body}</p>
     </div>

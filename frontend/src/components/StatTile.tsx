@@ -13,9 +13,13 @@ interface StatTileProps {
    * into the same display string mid-count. */
   numericValue?: number | null
   format?: (n: number) => string
+  /** Goldman's under-stat citation convention, formalized (decision 0020
+   * §2c) — a small mono source line under every headline stat, distinct
+   * from `sub` (which carries the CI/statistical-diagnostic line). */
+  source?: string
 }
 
-export function StatTile({ label, value, sub, numericValue, format }: StatTileProps) {
+export function StatTile({ label, value, sub, numericValue, format, source }: StatTileProps) {
   const valueRef = useRef<HTMLDivElement>(null)
   const reducedMotion = useReducedMotion()
   const [display, setDisplay] = useState(value)
@@ -45,6 +49,11 @@ export function StatTile({ label, value, sub, numericValue, format }: StatTilePr
         {display}
       </div>
       {sub ? <div className="text-muted-foreground mt-1.5 text-[11.5px] leading-snug">{sub}</div> : null}
+      {source ? (
+        <div className="text-muted-foreground/70 mt-1.5 border-t pt-1.5 font-mono text-[9.5px] tracking-wide uppercase">
+          Source: {source}
+        </div>
+      ) : null}
     </div>
   )
 }

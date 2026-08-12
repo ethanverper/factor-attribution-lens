@@ -156,6 +156,12 @@
     font-family: var(--font-display);
     font-weight: 500;
   }
+  /* Institutional register (decision 0020 §2a): page-level h1 drops one
+     notch to 400, matching Goldman's/JPM's own public-site H1 weight --
+     h2-h4 and .font-display (component-level headings) stay at 500. */
+  h1 {
+    font-weight: 400;
+  }
   /* Non-negotiable carryover from decision 0012: no heading uses shadcn's default
      font-semibold. Reserve 600+ for load-bearing single-stat mono values only. */
   [data-slot="card-title"] {

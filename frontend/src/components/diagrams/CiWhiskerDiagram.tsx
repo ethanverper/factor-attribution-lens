@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import gsap from "gsap"
 import { DiagramFigure } from "@/components/diagrams/DiagramFigure"
 import { useInView } from "@/hooks/use-in-view"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
+import { cn } from "@/lib/utils"
 
 const WIDTH = 720
 const HEIGHT = 210
@@ -22,6 +23,7 @@ function xOf(v: number) {
 }
 
 interface RowSpec {
+  id: "A" | "B"
   top: number
   label: string
   value: number
@@ -29,12 +31,18 @@ interface RowSpec {
   ciHi: number
   verdict: string
   color: string
+  correct: boolean
 }
 
 const ROWS: RowSpec[] = [
-  { top: ROW1_TOP, label: "Example factor A", value: 0.55, ciLo: 0.3, ciHi: 0.8, verdict: "✓ real exposure", color: "var(--success)" },
-  { top: ROW2_TOP, label: "Example factor B", value: 0.15, ciLo: -0.2, ciHi: 0.5, verdict: "≈ inconclusive", color: "var(--warning)" },
+  { id: "A", top: ROW1_TOP, label: "Example A", value: 0.55, ciLo: 0.3, ciHi: 0.8, verdict: "✓ real exposure", color: "var(--success)", correct: true },
+  { id: "B", top: ROW2_TOP, label: "Example B", value: 0.15, ciLo: -0.2, ciHi: 0.5, verdict: "≈ inconclusive", color: "var(--warning)", correct: false },
 ]
+
+const FEEDBACK: Record<"A" | "B", string> = {
+  A: "Correct — Example A's interval never crosses zero.",
+  B: "Look again — Example B's interval crosses zero, which is why it's inconclusive even though the point estimate itself is nonzero.",
+}
 
 function Row({ spec, barRef, whiskerRef, verdictRef }: { spec: RowSpec; barRef: React.Ref<SVGGElement>; whiskerRef: React.Ref<SVGGElement>; verdictRef: React.Ref<SVGTextElement> }) {
   const cy = spec.top + BAR_H / 2 + 4
@@ -70,13 +78,16 @@ function Row({ spec, barRef, whiskerRef, verdictRef }: { spec: RowSpec; barRef: 
 }
 
 /** Generic factor-loading confidence-interval example -- ported from
- * `diagrams.py::factor_loading_ci_diagram`. Illustrative, not this run's
- * data: one example whose CI excludes zero (real exposure) vs. one that
- * includes it (inconclusive). Reveals in reading order per row: point
- * estimate, then whisker, then verdict. */
+ * `diagrams.py::factor_loading_ci_diagram`, converted into a genuine
+ * predict-then-reveal check (decision 0020 §3c): the reader picks which
+ * example is the real exposure before either verdict is shown, since
+ * reading a CI whisker is exactly what they need to do on the real Results
+ * charts moments later. Point estimate + whisker still reveal on
+ * scroll-into-view; verdicts stay gated behind the click. */
 export function CiWhiskerDiagram() {
   const { ref, inView } = useInView<HTMLDivElement>(0.4)
   const reducedMotion = useReducedMotion()
+  const [answered, setAnswered] = useState<"A" | "B" | null>(null)
   const barRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null)]
   const whiskerRefs = [useRef<SVGGElement>(null), useRef<SVGGElement>(null)]
   const verdictRefs = [useRef<SVGTextElement>(null), useRef<SVGTextElement>(null)]
@@ -84,8 +95,7 @@ export function CiWhiskerDiagram() {
   useEffect(() => {
     const bars = barRefs.map((r) => r.current).filter(Boolean) as SVGGElement[]
     const whiskers = whiskerRefs.map((r) => r.current).filter(Boolean) as SVGGElement[]
-    const verdicts = verdictRefs.map((r) => r.current).filter(Boolean) as SVGTextElement[]
-    const all = [...bars, ...whiskers, ...verdicts]
+    const all = [...bars, ...whiskers]
     if (!all.length) return
     if (!inView || reducedMotion) {
       gsap.set(all, { opacity: 1 })
@@ -95,40 +105,88 @@ export function CiWhiskerDiagram() {
       const tl = gsap.timeline()
       tl.fromTo(bars, { opacity: 0 }, { opacity: 1, duration: 0.35, stagger: 0.15, ease: "power2.out" })
         .fromTo(whiskers, { opacity: 0, scaleX: 0.7 }, { opacity: 1, scaleX: 1, duration: 0.35, stagger: 0.15, ease: "power2.out" }, "-=0.15")
-        .fromTo(verdicts, { opacity: 0 }, { opacity: 1, duration: 0.3, stagger: 0.15, ease: "power2.out" }, "-=0.1")
     })
     return () => ctx.revert()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView, reducedMotion])
 
+  useEffect(() => {
+    const verdicts = verdictRefs.map((r) => r.current).filter(Boolean) as SVGTextElement[]
+    if (!answered || !verdicts.length) return
+    if (reducedMotion) {
+      gsap.set(verdicts, { opacity: 1 })
+      return
+    }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(verdicts, { opacity: 0 }, { opacity: 1, duration: 0.3, stagger: 0.15, ease: "power2.out" })
+    })
+    return () => ctx.revert()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answered, reducedMotion])
+
   return (
-    <DiagramFigure
-      ref={ref}
-      ariaLabel="Diagram: two illustrative factor loadings with 95% confidence interval whiskers, one whose interval excludes zero (a real exposure) and one whose interval includes zero (inconclusive)"
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      caption={
-        <>
-          Illustrative example, not your data (see Results for your actual loadings and whiskers). A factor loading
-          is only worth reading as a real exposure when its whisker &mdash; the 95% confidence interval around the
-          point estimate &mdash; stays entirely on one side of zero, like Example A. When the whisker crosses the
-          zero line, like Example B, the data can't distinguish that loading from &ldquo;no exposure at all&rdquo;
-          at 95% confidence, even though the point estimate itself is a nonzero number.
-        </>
-      }
-    >
-      <line x1={ZERO_X} y1={10} x2={ZERO_X} y2={AXIS_Y - 8} stroke="var(--border)" strokeWidth={1.5} strokeDasharray="3 3" />
-      <text x={ZERO_X} y={AXIS_Y + 14} fontSize={11} textAnchor="middle" fill="var(--muted-foreground)">
-        0
-      </text>
-      <line x1={LEFT_W} y1={AXIS_Y} x2={WIDTH - RIGHT_W + 30} y2={AXIS_Y} stroke="var(--border)" strokeWidth={1} />
-      <text x={LEFT_W} y={AXIS_Y + 30} fontSize={10.5} fill="var(--muted-foreground)">
-        ← negative loading
-      </text>
-      <text x={WIDTH - RIGHT_W + 30} y={AXIS_Y + 30} fontSize={10.5} textAnchor="end" fill="var(--muted-foreground)">
-        positive loading →
-      </text>
-      <Row spec={ROWS[0]} barRef={barRefs[0]} whiskerRef={whiskerRefs[0]} verdictRef={verdictRefs[0]} />
-      <Row spec={ROWS[1]} barRef={barRefs[1]} whiskerRef={whiskerRefs[1]} verdictRef={verdictRefs[1]} />
-    </DiagramFigure>
+    <div>
+      <div className="bg-muted/40 mt-3 rounded-lg border p-3.5">
+        <p className="text-foreground mb-2.5 text-[12.5px] font-medium">
+          Try it: which example is a real, statistically distinguishable exposure?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {ROWS.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              disabled={answered !== null}
+              onClick={() => setAnswered(row.id)}
+              className={cn(
+                "rounded-md border px-3 py-1.5 font-mono text-[11.5px] transition-colors disabled:cursor-not-allowed",
+                answered === row.id ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted",
+                answered !== null && answered !== row.id ? "opacity-50" : ""
+              )}
+            >
+              {row.label} is the real exposure
+            </button>
+          ))}
+        </div>
+        {answered ? (
+          <p
+            className={cn(
+              "mt-2.5 text-[12px] leading-relaxed",
+              ROWS.find((r) => r.id === answered)?.correct ? "text-success" : "text-warning"
+            )}
+          >
+            {FEEDBACK[answered]}
+          </p>
+        ) : null}
+      </div>
+
+      <DiagramFigure
+        ref={ref}
+        ariaLabel="Diagram: two illustrative factor loadings with 95% confidence interval whiskers, one whose interval excludes zero (a real exposure) and one whose interval includes zero (inconclusive) -- verdicts revealed after the reader answers the question above"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        caption={
+          <>
+            Illustrative example, not your data (see Results for your actual loadings and whiskers). A factor loading
+            is only worth reading as a real exposure when its whisker &mdash; the 95% confidence interval around the
+            point estimate &mdash; stays entirely on one side of zero, like Example A. When the whisker crosses the
+            zero line, like Example B, the data can't distinguish that loading from &ldquo;no exposure at all&rdquo;
+            at 95% confidence, even though the point estimate itself is a nonzero number.
+          </>
+        }
+      >
+        <line x1={ZERO_X} y1={10} x2={ZERO_X} y2={AXIS_Y - 8} stroke="var(--border)" strokeWidth={1.5} strokeDasharray="3 3" />
+        <text x={ZERO_X} y={AXIS_Y + 14} fontSize={11} textAnchor="middle" fill="var(--muted-foreground)">
+          0
+        </text>
+        <line x1={LEFT_W} y1={AXIS_Y} x2={WIDTH - RIGHT_W + 30} y2={AXIS_Y} stroke="var(--border)" strokeWidth={1} />
+        <text x={LEFT_W} y={AXIS_Y + 30} fontSize={10.5} fill="var(--muted-foreground)">
+          ← negative loading
+        </text>
+        <text x={WIDTH - RIGHT_W + 30} y={AXIS_Y + 30} fontSize={10.5} textAnchor="end" fill="var(--muted-foreground)">
+          positive loading →
+        </text>
+        <Row spec={ROWS[0]} barRef={barRefs[0]} whiskerRef={whiskerRefs[0]} verdictRef={verdictRefs[0]} />
+        <Row spec={ROWS[1]} barRef={barRefs[1]} whiskerRef={whiskerRefs[1]} verdictRef={verdictRefs[1]} />
+      </DiagramFigure>
+    </div>
   )
 }
