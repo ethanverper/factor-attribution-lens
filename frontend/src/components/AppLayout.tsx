@@ -12,7 +12,7 @@ export function AppLayout() {
         <header className="bg-background sticky top-0 z-30 flex h-12 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-4" />
-          <span className="font-display text-sm font-medium">Factor Lens</span>
+          <span className="font-display text-sm font-medium">Factor Attribution Lens</span>
         </header>
         <main className="flex-1 pb-20">
           <div className="mx-auto max-w-4xl px-5 py-8 sm:px-8 md:px-10 md:py-10">

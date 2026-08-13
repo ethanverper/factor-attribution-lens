@@ -1,4 +1,4 @@
-"""Pydantic request/response schemas for the Factor Lens data API.
+"""Pydantic request/response schemas for the Factor Attribution Lens data API.
 
 These shapes are the hand-off contract with Phase 2 (quant-analyst): a
 portfolio request in, an aligned bundle of equity/benchmark/factor return

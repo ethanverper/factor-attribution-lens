@@ -45,15 +45,15 @@ export function Overview() {
         <span className="bg-primary inline-block size-1.5 rounded-full" />
         [01] Overview
       </div>
-      <h1 className="font-display mb-6 text-[27px] font-medium tracking-tight sm:text-[30px]">Factor Lens</h1>
+      <h1 className="font-display mb-6 text-[27px] font-medium tracking-tight sm:text-[30px]">Factor Attribution Lens</h1>
 
       <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[55fr_45fr]">
         <div>
           <h2 className="font-display mb-3 text-[22px] leading-snug font-medium tracking-tight sm:text-[25px]">
-            Factor Lens explains why a portfolio behaves the way it does.
+            Factor Attribution Lens explains why a portfolio behaves the way it does.
           </h2>
           <p className="text-muted-foreground mb-4 max-w-[54ch] text-[14.5px] leading-relaxed">
-            Enter your holdings and a benchmark — Factor Lens runs CAPM, Fama-French, and Markowitz optimization on
+            Enter your holdings and a benchmark — Factor Attribution Lens runs CAPM, Fama-French, and Markowitz optimization on
             live market data and returns your beta, factor loadings, and frontier position, each with full
             statistical diagnostics.
           </p>

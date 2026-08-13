@@ -36,7 +36,7 @@ export function AppSidebar() {
             <ApertureMark size={30} strokeWidth={2.2} />
           </span>
           <div className="leading-tight">
-            <div className="font-display text-[17px] font-medium tracking-tight">Factor Lens</div>
+            <div className="font-display text-[17px] font-medium tracking-tight">Factor Attribution Lens</div>
             <div className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
               Factor attribution console
             </div>
@@ -80,7 +80,7 @@ export function AppSidebar() {
         <p className="font-mono text-[10px] tracking-wide uppercase text-muted-foreground">
           Built by{" "}
           <a
-            href="https://github.com/ethanverper/factor-lens"
+            href="https://github.com/ethanverper/factor-attribution-lens"
             target="_blank"
             rel="noreferrer"
             className="text-foreground underline underline-offset-2 hover:text-primary"

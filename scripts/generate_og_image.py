@@ -1,4 +1,4 @@
-"""One-off generator for Factor Lens's social-preview (Open Graph) image.
+"""One-off generator for Factor Attribution Lens's social-preview (Open Graph) image.
 
 Not part of the app's runtime dependencies -- Pillow is only needed to run
 this script once, not to serve the app. Run it with:
@@ -81,16 +81,16 @@ def main() -> None:
 
     mark_box = (72, 72, 72 + 64, 72 + 64)
     d.rounded_rectangle(mark_box, radius=10, outline=AMBER, width=2)
-    bbox = d.textbbox((0, 0), "FL", font=mono)
+    bbox = d.textbbox((0, 0), "FAL", font=mono)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     d.text(
         (mark_box[0] + (64 - tw) / 2 - bbox[0], mark_box[1] + (64 - th) / 2 - bbox[1]),
-        "FL",
+        "FAL",
         font=mono,
         fill=TEXT_PRIMARY,
     )
 
-    d.text((72, 168), "Factor Lens", font=sg_bold, fill=TEXT_PRIMARY)
+    d.text((72, 168), "Factor Attribution Lens", font=sg_bold, fill=TEXT_PRIMARY)
     d.text((74, 250), "Portfolio factor attribution, computed live", font=inter_reg, fill=TEXT_SECONDARY)
 
     tags = ["CAPM", "FAMA-FRENCH", "MARKOWITZ"]
@@ -122,7 +122,7 @@ def main() -> None:
     d.line([(72, 552), (1128, 552)], fill=BORDER, width=1)
     d.text(
         (72, 574),
-        "Live OpenBB + Kenneth French factor data  ·  github.com/ethanverper/factor-lens",
+        "Live OpenBB + Kenneth French factor data  ·  github.com/ethanverper/factor-attribution-lens",
         font=mono_sm,
         fill=TEXT_MUTED,
     )

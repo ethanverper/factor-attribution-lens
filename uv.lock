@@ -441,7 +441,7 @@ wheels = [
 ]
 
 [[package]]
-name = "factor-lens"
+name = "factor-attribution-lens"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

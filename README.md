@@ -1,4 +1,4 @@
-# Factor Lens
+# Factor Attribution Lens
 
 Built by [Ethan Verduzco](https://github.com/ethanverper).
 
@@ -20,7 +20,7 @@ investment advice, no trade execution, no custody of funds.
 
 ## What makes this different from a factor-model script
 
-Most factor-model code stops at the coefficients. Factor Lens treats the
+Most factor-model code stops at the coefficients. Factor Attribution Lens treats the
 step after the numbers — explaining what they actually mean for *this*
 portfolio — as the core deliverable, not an afterthought:
 

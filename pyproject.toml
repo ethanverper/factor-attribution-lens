@@ -1,5 +1,5 @@
 [project]
-name = "factor-lens"
+name = "factor-attribution-lens"
 version = "0.1.0"
 description = "Transparent factor-attribution and portfolio-optimization tool built on live OpenBB market data."
 requires-python = ">=3.11"

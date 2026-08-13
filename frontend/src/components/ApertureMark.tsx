@@ -1,5 +1,5 @@
 /**
- * Factor Lens's brand mark — a circular aperture/focus-ring glyph, ported
+ * Factor Attribution Lens's brand mark — a circular aperture/focus-ring glyph, ported
  * from `app/dashboard/mark.py::_rings_markup` (decision 0012/0017 §4): an
  * outer focus ring, a mid ring, and a solid core, no photographic
  * literalism. One component feeds every use — the sidebar masthead, the
@@ -35,7 +35,7 @@ export function ApertureMark({
       height={size}
       className={className}
       role="img"
-      aria-label="Factor Lens"
+      aria-label="Factor Attribution Lens"
       focusable="false"
     >
       <circle cx={c} cy={c} r={outerR} fill="none" stroke={ringColor} strokeWidth={strokeWidth} />

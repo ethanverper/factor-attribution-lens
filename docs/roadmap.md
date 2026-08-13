@@ -1,7 +1,7 @@
 # Factor Lens — Roadmap
 
 Domain: finance
-Path: `projects/finance/factor-lens/`
+Path: `projects/finance/factor-attribution-lens/`
 Selected from: [`docs/ideation/finance/2026-08-10-fintech-quant-analytics-shortlist.md`](../../../../docs/ideation/finance/2026-08-10-fintech-quant-analytics-shortlist.md) (idea 1 of 6)
 Source research: [`docs/research/finance/2026-08-10-fintech-ai-quant-wealthtech.md`](../../../../docs/research/finance/2026-08-10-fintech-ai-quant-wealthtech.md)
 Stakeholder: Ethan (human operator)

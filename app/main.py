@@ -1,4 +1,4 @@
-"""Factor Lens API — Phase 1 data layer + Phase 10i pure JSON API.
+"""Factor Attribution Lens API — Phase 1 data layer + Phase 10i pure JSON API.
 
 `POST /portfolio/returns` (Phase 1) takes a holdings + weights input and
 returns live, structured return data for Phase 2 modeling. `app/api/`
@@ -30,7 +30,7 @@ from app.schemas import PortfolioRequest, PortfolioReturnData
 from app.service import build_portfolio_return_data
 
 app = FastAPI(
-    title="Factor Lens API",
+    title="Factor Attribution Lens API",
     description="Live equity, benchmark, and Fama-French factor data, plus CAPM/Fama-French/Markowitz portfolio analysis, as a pure JSON API.",
     version="0.2.0",
 )

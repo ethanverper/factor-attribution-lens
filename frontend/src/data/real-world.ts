@@ -63,7 +63,7 @@ export const REAL_WORLD_CARDS: RealWorldCard[] = [
     callout: {
       variant: "note",
       label: "How this project fits",
-      text: "Factor Lens pairs the exact math (References &amp; Formulas) with a plain-language read (Learning) &mdash; the same dual-register explanation an advisor gives a client, just self-serve.",
+      text: "Factor Attribution Lens pairs the exact math (References &amp; Formulas) with a plain-language read (Learning) &mdash; the same dual-register explanation an advisor gives a client, just self-serve.",
     },
   },
   {
@@ -86,7 +86,7 @@ export const REAL_WORLD_CARDS: RealWorldCard[] = [
     callout: {
       variant: "caveat",
       label: "Not a recommendation",
-      text: "This is a transparency device, not an automated trade &mdash; Factor Lens shows the tradeoff, it doesn't rebalance anything for you.",
+      text: "This is a transparency device, not an automated trade &mdash; Factor Attribution Lens shows the tradeoff, it doesn't rebalance anything for you.",
     },
   },
   {

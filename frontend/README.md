@@ -1,4 +1,4 @@
-# Factor Lens — frontend
+# Factor Attribution Lens — frontend
 
 React (Vite + TypeScript) + Tailwind CSS + shadcn/ui single-page app.
 See the [project root README](../README.md) for how this fits into the

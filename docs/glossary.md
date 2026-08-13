@@ -1,4 +1,4 @@
-# Factor Lens — Glossary
+# Factor Attribution Lens — Glossary
 
 Owned by `educator`. Every term this project's own app uses (Overview, Results, Learning, References & Formulas,
 Real World sections), in the same dual-register format the live app renders under **Glossary**

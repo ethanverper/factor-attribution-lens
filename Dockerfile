@@ -1,4 +1,4 @@
-# Factor Lens — single-service production image.
+# Factor Attribution Lens — single-service production image.
 #
 # Deployment shape is decided in docs/decisions/0018-phase10i-react-rebuild.md
 # §2 and logged in docs/decisions/0023-phase11-railway-deployment.md: one

@@ -1,4 +1,4 @@
-"""FastAPI routes for Factor Lens's pure JSON API (Phase 10i).
+"""FastAPI routes for Factor Attribution Lens's pure JSON API (Phase 10i).
 
 `POST /api/analysis` is the primary endpoint the React frontend calls: it
 runs the exact `build_portfolio_return_data` -> `analyze_portfolio` pipeline

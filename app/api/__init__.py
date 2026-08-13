@@ -1,4 +1,4 @@
-"""Factor Lens's pure JSON API for the React frontend (Phase 10i).
+"""Factor Attribution Lens's pure JSON API for the React frontend (Phase 10i).
 
 Everything here is data in, data out -- no HTML rendering. `routes.py`
 exposes the full CAPM/Fama-French/Markowitz analysis pipeline

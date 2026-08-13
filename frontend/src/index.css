@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Factor Lens design tokens — carried forward by value from
+/* Factor Attribution Lens design tokens — carried forward by value from
    `docs/decisions/0017-phase10h-identity-for-react-stack.md` §1, itself
    carried forward from `app/dashboard/viz.py::CHART_STYLE` (decisions
    0008/0012). Graphite-navy dark mode, cool gray-blue light mode, one amber
